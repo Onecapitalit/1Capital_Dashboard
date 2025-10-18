@@ -1,0 +1,243 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ title }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.1/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.0.0"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+        }
+        .data-card {
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+            border-left: 5px solid #3b82f6;
+        }
+        .text-data {
+            font-weight: 700;
+        }
+        .logout-link {
+            transition: background-color 0.2s;
+        }
+        .logout-link:hover {
+            background-color: #ef4444;
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <!-- Header and Summary Section -->
+    <header class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+        <div>
+            <h1 class="text-3xl font-extrabold text-gray-800 mb-1">{{ title }}</h1>
+            <p class="text-lg text-gray-600">Logged in as: <span class="font-semibold">{{ user.username }} ({{ user_role }})</span></p>
+        </div>
+        <form method="post" action="{% url 'logout' %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="mt-4 sm:mt-0 px-4 py-2 bg-red-500 text-white rounded-lg shadow-md logout-link">
+                Logout
+            </button>
+        </form>
+    </header>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <!-- Grand Total Card 1: Equity Brokerage -->
+        <div class="bg-white p-6 rounded-xl data-card border-l-orange-500">
+            <p class="text-sm text-gray-500 uppercase tracking-wider">Total Equity Brokerage</p>
+            <p class="text-3xl text-data text-orange-600 mt-1">₹ {{ grand_totals.equity|floatformat:2|intcomma }}</p>
+        </div>
+
+        <!-- Grand Total Card 2: MF Brokerage -->
+        <div class="bg-white p-6 rounded-xl data-card border-l-green-500">
+            <p class="text-sm text-gray-500 uppercase tracking-wider">Total Mutual Fund Brokerage</p>
+            <p class="text-3xl text-data text-green-600 mt-1">₹ {{ grand_totals.mf|floatformat:2|intcomma }}</p>
+        </div>
+
+        <!-- Grand Total Card 3: Combined Total -->
+        <div class="bg-white p-6 rounded-xl data-card border-l-blue-500">
+            <p class="text-sm text-gray-500 uppercase tracking-wider">Total Revenue</p>
+            <p class="text-3xl text-data text-blue-600 mt-1">₹ {{ grand_totals.total|floatformat:2|intcomma }}</p>
+        </div>
+    </div>
+
+    <!-- Date Range Filter -->
+    <div class="mb-6 bg-white p-4 rounded-xl shadow-lg">
+        <h3 class="text-lg font-bold text-gray-800 mb-2">Filter Data</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label for="startDate" class="block text-sm font-medium text-gray-700">Start Date</label>
+                <input type="date" id="startDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            </div>
+            <div>
+                <label for="endDate" class="block text-sm font-medium text-gray-700">End Date</label>
+                <input type="date" id="endDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+            </div>
+        </div>
+        <button onclick="applyDateFilter()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            Apply Filter
+        </button>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+        <!-- Revenue Distribution Chart -->
+        <div class="bg-white p-6 rounded-xl shadow-lg">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Revenue Distribution</h3>
+            <canvas id="revenueDistribution" class="w-full h-64"></canvas>
+        </div>
+
+        <!-- Growth Trend Chart -->
+        <div class="bg-white p-6 rounded-xl shadow-lg">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Cumulative Growth</h3>
+            <canvas id="growthTrend" class="w-full h-64"></canvas>
+        </div>
+    </div>
+
+    {% if reports_summary %}
+    <!-- Team Performance Section -->
+    <div class="mb-8">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Team Performance</h2>
+        <div class="overflow-x-auto bg-white rounded-xl shadow-md">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Team Member</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Equity Brokerage</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MF Brokerage</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for report in reports_summary %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ report.username }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ report.role }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹ {{ report.equity|floatformat:2|intcomma }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹ {{ report.mf|floatformat:2|intcomma }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">₹ {{ report.total|default:0|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Sales Records Section -->
+    <div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Sales Records</h2>
+        <div class="overflow-x-auto bg-white rounded-xl shadow-md">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead>
+                    <tr class="bg-gray-50">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Client ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Equity Brokerage</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MF Brokerage</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for record in viewable_records %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ record.client_name }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ record.client_id }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹ {{ record.brokerage_equity|floatformat:2|intcomma }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹ {{ record.brokerage_mf|floatformat:2|intcomma }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">₹ {{ record.total|floatformat:2|intcomma }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ record.created_at|date:"M d, Y" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Chart initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Data from Django view
+            const chartData = {{ chart_data|safe }};
+
+            // Revenue Distribution Pie Chart
+            const pieCtx = document.getElementById('revenueDistribution').getContext('2d');
+            new Chart(pieCtx, {
+                type: 'pie',
+                data: {
+                    labels: ['Equity Brokerage', 'Mutual Fund Brokerage'],
+                    datasets: [{
+                        data: [{{ grand_totals.equity }}, {{ grand_totals.mf }}],
+                        backgroundColor: ['#f97316', '#22c55e'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Growth Trend Line Chart
+            const lineCtx = document.getElementById('growthTrend').getContext('2d');
+            new Chart(lineCtx, {
+                type: 'line',
+                data: {
+                    labels: chartData.dates,
+                    datasets: [{
+                        label: 'Cumulative Equity',
+                        data: chartData.cumulative_equity,
+                        borderColor: '#f97316',
+                        fill: false,
+                        tension: 0.4
+                    }, {
+                        label: 'Cumulative MF',
+                        data: chartData.cumulative_mf,
+                        borderColor: '#22c55e',
+                        fill: false,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        });
+
+        // Date filter functionality
+        function applyDateFilter() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            if (startDate && endDate) {
+                window.location.href = `?start_date=${startDate}&end_date=${endDate}`;
+            }
+        }
+    </script>
+</body>
+</html>
