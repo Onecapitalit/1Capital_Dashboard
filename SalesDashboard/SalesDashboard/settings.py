@@ -19,7 +19,14 @@ SECRET_KEY = 'django-insecure-hlzzhh%#2^c06&q4^_d$dd8)e3w-omsahr!iqu!tq#zs#k89v(
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
 # Allow all hosts in development, but require explicit hosts in production
-ALLOWED_HOSTS = ['localhost', '127.0.0.1'] if DEBUG else []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'rubye-trilinear-jameson.ngrok-free.dev', '*.ngrok.io', '*.ngrok-free.dev'] if DEBUG else []
+
+# CSRF Trusted Origins for ngrok
+CSRF_TRUSTED_ORIGINS = [
+    'https://rubye-trilinear-jameson.ngrok-free.dev',
+    'https://*.ngrok-free.dev',
+    'https://*.ngrok.io',
+]
 
 # INTERNAL_IPS for debug toolbar (only used if installed)
 INTERNAL_IPS = ['127.0.0.1']
