@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {  useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../auth/AuthContext';
 
@@ -358,7 +358,7 @@ export function NewLandingPage() {
               <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden relative group cursor-pointer hover:border-blue-200 transition-all">
                  <div className="absolute top-0 left-0 bg-blue-500 text-white text-[9px] font-bold px-3 py-1 rounded-br-lg z-10 uppercase tracking-widest">EXCLUSIVE</div>
                  <div className="p-5 pt-8 flex items-center">
-                    <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mr-4 flex-shrink-0 relative group-hover:bg-blue-100 transition-colors">
+                    <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mr-4 relative group-hover:bg-blue-100 transition-colors">
                        <i className="fas fa-bullseye text-lg"></i>
                     </div>
                     <div>
