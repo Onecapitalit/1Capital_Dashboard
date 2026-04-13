@@ -7,49 +7,76 @@ from django.db.models import Sum, Count, Q, F, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal
 import pandas as pd
-from .models import SalesRecord, Employee, Client
+from .models import SalesRecord, Employee, Client, SalesRecordAAABrokerage, SalesRecordMF
 
 
 class BrokerageAnalytics:
-    """Analytics engine for sales/brokerage data"""
+    """Analytics engine for sales/brokerage data (using specialized tables)"""
     
+    @staticmethod
+    def _apply_filters(queryset, filters, is_mf=False):
+        """Helper to apply common filters to querysets with priority override"""
+        if not filters:
+            return queryset
+            
+        # 1. Priority-based Employee Filtering (MA > RM > Manager)
+        if filters.get('ma_name'):
+            selected_ma = filters['ma_name']
+            if is_mf:
+                # Robust MA lookup: 1. Client Link, 2. Employee Link, 3. Wire Code Mapping
+                # We need to find all wire codes associated with this MA to include them in the filter
+                try:
+                    ma_emp = Employee.objects.get(rm_name=selected_ma)
+                    ma_wire_codes = list(ma_emp.wire_codes.values_list('wire_code', flat=True))
+                    if ma_emp.wire_code:
+                        ma_wire_codes.append(ma_emp.wire_code)
+                    
+                    queryset = queryset.filter(
+                        Q(client__ma_name=selected_ma) | 
+                        Q(employee__rm_name=selected_ma) |
+                        Q(wire_code__in=ma_wire_codes)
+                    )
+                except Employee.DoesNotExist:
+                    queryset = queryset.filter(Q(client__ma_name=selected_ma) | Q(employee__rm_name=selected_ma))
+            else:
+                queryset = queryset.filter(ma_name=selected_ma)
+        elif filters.get('rm_name'):
+            queryset = queryset.filter(rm_name=filters['rm_name'])
+        elif filters.get('rm_manager_name'):
+            queryset = queryset.filter(rm_manager_name=filters['rm_manager_name'])
+
+        # 2. Additional Dimensional Filters
+        if filters.get('client_name'):
+            queryset = queryset.filter(client_name=filters['client_name'])
+        
+        if filters.get('period'):
+            queryset = queryset.filter(period=filters['period'])
+            
+        if filters.get('wire_code'):
+            queryset = queryset.filter(wire_code=filters['wire_code'])
+
+        if filters.get('date_from'):
+            queryset = queryset.filter(transaction_date__gte=filters['date_from'])
+
+        if filters.get('date_to'):
+            queryset = queryset.filter(transaction_date__lte=filters['date_to'])
+            
+        return queryset
+
     @staticmethod
     def get_total_brokerage(filters=None):
         """
         Get total brokerage across all sources (Equity + MF)
-        
-        Args:
-            filters: Dict with optional keys: 'rm_name', 'rm_manager_name', 'ma_name', 
-                    'client_name', 'period', 'wire_code'
-        
-        Returns:
-            Decimal: Total brokerage amount
         """
         filters = filters or {}
-        queryset = SalesRecord.objects.all()
         
-        # Apply filters
-        if 'rm_name' in filters and filters['rm_name']:
-            queryset = queryset.filter(rm_name=filters['rm_name'])
-        if 'rm_manager_name' in filters and filters['rm_manager_name']:
-            queryset = queryset.filter(rm_manager_name=filters['rm_manager_name'])
-        if 'ma_name' in filters and filters['ma_name']:
-            queryset = queryset.filter(ma_name=filters['ma_name'])
-        if 'client_name' in filters and filters['client_name']:
-            queryset = queryset.filter(client_name=filters['client_name'])
-        if 'period' in filters and filters['period']:
-            queryset = queryset.filter(period=filters['period'])
-        if 'wire_code' in filters and filters['wire_code']:
-            queryset = queryset.filter(wire_code=filters['wire_code'])
+        # AAA Brokerage
+        aaa_qs = BrokerageAnalytics._apply_filters(SalesRecordAAABrokerage.objects.all(), filters)
+        brokerage_total = aaa_qs.aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
         
-        # Aggregate brokerage from both sources
-        brokerage_total = queryset.filter(
-            data_source='BROKERAGE'
-        ).aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
-        
-        mf_total = queryset.filter(
-            data_source='MF'
-        ).aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
+        # MF Brokerage
+        mf_qs = BrokerageAnalytics._apply_filters(SalesRecordMF.objects.all(), filters, is_mf=True)
+        mf_total = mf_qs.aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
         
         return brokerage_total + mf_total
     
@@ -57,36 +84,26 @@ class BrokerageAnalytics:
     def get_brokerage_by_rm(filters=None):
         """
         Get brokerage breakdown by RM
-        
-        Returns:
-            List of dicts: [{'rm_name': str, 'total_brokerage': Decimal, 'count': int}, ...]
         """
         filters = filters or {}
-        queryset = SalesRecord.objects.all()
         
-        # Apply filters
-        if 'rm_manager_name' in filters and filters['rm_manager_name']:
-            queryset = queryset.filter(rm_manager_name=filters['rm_manager_name'])
-        if 'period' in filters and filters['period']:
-            queryset = queryset.filter(period=filters['period'])
+        # Get all unique RM names from both tables
+        aaa_rms = set(BrokerageAnalytics._apply_filters(SalesRecordAAABrokerage.objects.all(), filters).values_list('rm_name', flat=True).distinct())
+        mf_rms = set(BrokerageAnalytics._apply_filters(SalesRecordMF.objects.all(), filters, is_mf=True).values_list('rm_name', flat=True).distinct())
+        all_rm_names = aaa_rms.union(mf_rms)
         
-        # Group by RM and sum brokerage
         data = []
-        rm_names = queryset.values_list('rm_name', flat=True).distinct()
-        
-        for rm_name in rm_names:
-            rm_queryset = queryset.filter(rm_name=rm_name)
+        for rm_name in all_rm_names:
+            # AAA for this RM
+            aaa_rm_qs = BrokerageAnalytics._apply_filters(SalesRecordAAABrokerage.objects.filter(rm_name=rm_name), filters)
+            brk_total = aaa_rm_qs.aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
             
-            brk_total = rm_queryset.filter(
-                data_source='BROKERAGE'
-            ).aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
-            
-            mf_total = rm_queryset.filter(
-                data_source='MF'
-            ).aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
+            # MF for this RM
+            mf_rm_qs = BrokerageAnalytics._apply_filters(SalesRecordMF.objects.filter(rm_name=rm_name), filters, is_mf=True)
+            mf_total = mf_rm_qs.aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
             
             combined = brk_total + mf_total
-            count = rm_queryset.count()
+            count = aaa_rm_qs.count() + mf_rm_qs.count()
             
             data.append({
                 'rm_name': rm_name,
@@ -96,7 +113,6 @@ class BrokerageAnalytics:
                 'client_count': count,
             })
         
-        # Sort by total brokerage descending
         data.sort(key=lambda x: x['total_brokerage'], reverse=True)
         return data
     
@@ -104,39 +120,34 @@ class BrokerageAnalytics:
     def get_brokerage_by_rm_manager(filters=None):
         """
         Get brokerage breakdown by RM Manager
-        
-        Returns:
-            List of dicts: [{'rm_manager_name': str, 'total_brokerage': Decimal, ...}, ...]
         """
         filters = filters or {}
-        queryset = SalesRecord.objects.filter(rm_manager_name__isnull=False)
         
-        if 'period' in filters and filters['period']:
-            queryset = queryset.filter(period=filters['period'])
+        aaa_mgrs = set(BrokerageAnalytics._apply_filters(SalesRecordAAABrokerage.objects.filter(rm_manager_name__isnull=False), filters).values_list('rm_manager_name', flat=True).distinct())
+        mf_mgrs = set(BrokerageAnalytics._apply_filters(SalesRecordMF.objects.filter(rm_manager_name__isnull=False), filters, is_mf=True).values_list('rm_manager_name', flat=True).distinct())
+        all_manager_names = aaa_mgrs.union(mf_mgrs)
         
         data = []
-        manager_names = queryset.values_list('rm_manager_name', flat=True).distinct()
-        
-        for mgr_name in manager_names:
-            mgr_queryset = queryset.filter(rm_manager_name=mgr_name)
+        for mgr_name in all_manager_names:
+            aaa_mgr_qs = BrokerageAnalytics._apply_filters(SalesRecordAAABrokerage.objects.filter(rm_manager_name=mgr_name), filters)
+            mf_mgr_qs = BrokerageAnalytics._apply_filters(SalesRecordMF.objects.filter(rm_manager_name=mgr_name), filters, is_mf=True)
             
-            brk_total = mgr_queryset.filter(
-                data_source='BROKERAGE'
-            ).aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
-            
-            mf_total = mgr_queryset.filter(
-                data_source='MF'
-            ).aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
+            brk_total = aaa_mgr_qs.aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
+            mf_total = mf_mgr_qs.aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
             
             combined = brk_total + mf_total
+            
+            # Count unique RMs under this manager
+            rm_count = set(aaa_mgr_qs.values_list('rm_name', flat=True).distinct()).union(
+                       set(mf_mgr_qs.values_list('rm_name', flat=True).distinct()))
             
             data.append({
                 'rm_manager_name': mgr_name,
                 'brokerage_total': float(brk_total),
                 'mf_total': float(mf_total),
                 'total_brokerage': float(combined),
-                'rm_count': mgr_queryset.values('rm_name').distinct().count(),
-                'client_count': mgr_queryset.count(),
+                'rm_count': len(rm_count),
+                'client_count': aaa_mgr_qs.count() + mf_mgr_qs.count(),
             })
         
         data.sort(key=lambda x: x['total_brokerage'], reverse=True)
@@ -146,47 +157,33 @@ class BrokerageAnalytics:
     def get_brokerage_by_client(rm_name=None, limit=50):
         """
         Get top clients by brokerage
-        
-        Args:
-            rm_name: Optional RM filter
-            limit: Number of top clients to return
-        
-        Returns:
-            List of dicts: [{'client_name': str, 'rm_name': str, 'total_brokerage': Decimal}, ...]
         """
-        queryset = SalesRecord.objects.all()
+        filters = {'rm_name': rm_name} if rm_name else {}
         
-        if rm_name:
-            queryset = queryset.filter(rm_name=rm_name)
+        # This is a bit complex as we need to group by client across both tables
+        # For simplicity, let's get unique clients from both
+        aaa_clients = BrokerageAnalytics._apply_filters(SalesRecordAAABrokerage.objects.all(), filters).values('client_name', 'rm_name').distinct()
+        mf_clients = BrokerageAnalytics._apply_filters(SalesRecordMF.objects.all(), filters, is_mf=True).values('client_name', 'rm_name').distinct()
+        
+        # Combine unique client-RM pairs
+        unique_clients = {(c['client_name'], c['rm_name']) for c in aaa_clients}.union(
+                         {(c['client_name'], c['rm_name']) for c in mf_clients})
         
         data = []
-        clients = queryset.values('client_name', 'rm_name').distinct()
-        
-        for client in clients:
-            client_queryset = queryset.filter(
-                client_name=client['client_name'],
-                rm_name=client['rm_name']
-            )
-            
-            brk_total = client_queryset.filter(
-                data_source='BROKERAGE'
-            ).aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
-            
-            mf_total = client_queryset.filter(
-                data_source='MF'
-            ).aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
+        for client_name, client_rm_name in unique_clients:
+            brk_total = SalesRecordAAABrokerage.objects.filter(client_name=client_name, rm_name=client_rm_name).aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
+            mf_total = SalesRecordMF.objects.filter(client_name=client_name, rm_name=client_rm_name).aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
             
             combined = brk_total + mf_total
             
             data.append({
-                'client_name': client['client_name'],
-                'rm_name': client['rm_name'],
+                'client_name': client_name,
+                'rm_name': client_rm_name,
                 'brokerage_total': float(brk_total),
                 'mf_total': float(mf_total),
                 'total_brokerage': float(combined),
             })
         
-        # Sort by total brokerage and limit
         data.sort(key=lambda x: x['total_brokerage'], reverse=True)
         return data[:limit]
     
@@ -194,61 +191,52 @@ class BrokerageAnalytics:
     def get_period_summary(period=None):
         """
         Get summary statistics for a period
-        
-        Args:
-            period: Optional period filter (e.g., 'Jan 2026')
-        
-        Returns:
-            Dict with summary stats
         """
-        queryset = SalesRecord.objects.all()
-        if period:
-            queryset = queryset.filter(period=period)
+        filters = {'period': period} if period else {}
         
-        brk_total = queryset.filter(
-            data_source='BROKERAGE'
-        ).aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
+        aaa_qs = BrokerageAnalytics._apply_filters(SalesRecordAAABrokerage.objects.all(), filters)
+        mf_qs = BrokerageAnalytics._apply_filters(SalesRecordMF.objects.all(), filters, is_mf=True)
         
-        mf_total = queryset.filter(
-            data_source='MF'
-        ).aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
+        brk_total = aaa_qs.aggregate(total=Coalesce(Sum('total_brokerage'), Decimal('0')))['total']
+        mf_total = mf_qs.aggregate(total=Coalesce(Sum('mf_brokerage'), Decimal('0')))['total']
+        
+        unique_clients = set(aaa_qs.values_list('client_name', flat=True).distinct()).union(
+                         set(mf_qs.values_list('client_name', flat=True).distinct()))
+                         
+        unique_rms = set(aaa_qs.values_list('rm_name', flat=True).distinct()).union(
+                     set(mf_qs.values_list('rm_name', flat=True).distinct()))
+        
+        unique_managers = set(aaa_qs.filter(rm_manager_name__isnull=False).values_list('rm_manager_name', flat=True).distinct()).union(
+                          set(mf_qs.filter(rm_manager_name__isnull=False).values_list('rm_manager_name', flat=True).distinct()))
         
         return {
             'period': period or 'All Time',
             'brokerage_total': float(brk_total),
             'mf_total': float(mf_total),
             'combined_total': float(brk_total + mf_total),
-            'unique_clients': queryset.values('client_name').distinct().count(),
-            'unique_rms': queryset.values('rm_name').distinct().count(),
-            'unique_managers': queryset.filter(rm_manager_name__isnull=False).values('rm_manager_name').distinct().count(),
-            'total_records': queryset.count(),
+            'unique_clients': len(unique_clients),
+            'unique_rms': len(unique_rms),
+            'unique_managers': len(unique_managers),
+            'total_records': aaa_qs.count() + mf_qs.count(),
         }
     
     @staticmethod
     def get_available_periods():
         """Get list of all available periods in data"""
-        periods = SalesRecord.objects.filter(
-            period__isnull=False
-        ).values_list('period', flat=True).distinct().order_by('-period')
-        return list(periods)
+        aaa_periods = set(SalesRecordAAABrokerage.objects.filter(period__isnull=False).values_list('period', flat=True).distinct())
+        mf_periods = set(SalesRecordMF.objects.filter(period__isnull=False).values_list('period', flat=True).distinct())
+        periods = sorted(list(aaa_periods.union(mf_periods)), reverse=True)
+        return periods
     
     @staticmethod
     def get_turnover_metrics(filters=None):
         """
-        Get turnover breakdown (Equity Cash, Equity FnO, Total)
-        
-        Returns:
-            Dict with turnover statistics
+        Get turnover breakdown
         """
         filters = filters or {}
-        queryset = SalesRecord.objects.filter(data_source='BROKERAGE')
+        aaa_qs = BrokerageAnalytics._apply_filters(SalesRecordAAABrokerage.objects.all(), filters)
         
-        if 'rm_name' in filters and filters['rm_name']:
-            queryset = queryset.filter(rm_name=filters['rm_name'])
-        if 'period' in filters and filters['period']:
-            queryset = queryset.filter(period=filters['period'])
-        
-        agg = queryset.aggregate(
+        agg = aaa_qs.aggregate(
             total_equity_cash=Coalesce(Sum('total_equity_cash_turnover'), Decimal('0')),
             total_equity_fno=Coalesce(Sum('total_equity_fno_turnover'), Decimal('0')),
             total_turnover=Coalesce(Sum('total_turnover'), Decimal('0')),
@@ -268,27 +256,23 @@ class DataQuality:
     def get_data_summary():
         """Get data quality summary"""
         summary = {
-            'total_records': SalesRecord.objects.count(),
+            'total_aaa_records': SalesRecordAAABrokerage.objects.count(),
+            'total_mf_records': SalesRecordMF.objects.count(),
             'total_employees': Employee.objects.count(),
             'total_clients': Client.objects.count(),
-            'records_with_nulls': SalesRecord.objects.filter(
-                Q(rm_name__isnull=True) | Q(client_name__isnull=True)
-            ).count(),
-            'orphaned_clients': SalesRecord.objects.filter(
-                client__isnull=True
-            ).count(),
-            'periods': SalesRecord.objects.filter(
-                period__isnull=False
-            ).values_list('period', flat=True).distinct().count(),
+            'orphaned_clients_aaa': SalesRecordAAABrokerage.objects.filter(client__isnull=True).count(),
+            'orphaned_clients_mf': SalesRecordMF.objects.filter(client__isnull=True).count(),
         }
         return summary
     
     @staticmethod
     def get_rm_coverage():
-        """Check if all RMs in SalesRecord exist in Employee table"""
-        sales_rms = set(SalesRecord.objects.values_list('rm_name', flat=True).distinct())
-        employee_rms = set(Employee.objects.values_list('rm_name', flat=True).distinct())
+        """Check if all RMs in specialized tables exist in Employee table"""
+        aaa_rms = set(SalesRecordAAABrokerage.objects.values_list('rm_name', flat=True).distinct())
+        mf_rms = set(SalesRecordMF.objects.values_list('rm_name', flat=True).distinct())
+        sales_rms = aaa_rms.union(mf_rms)
         
+        employee_rms = set(Employee.objects.values_list('rm_name', flat=True).distinct())
         unmapped_rms = sales_rms - employee_rms
         
         return {
@@ -297,3 +281,4 @@ class DataQuality:
             'unmapped_rms': list(unmapped_rms),
             'unmapped_count': len(unmapped_rms),
         }
+

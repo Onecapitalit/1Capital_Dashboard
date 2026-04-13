@@ -19,7 +19,7 @@ SECRET_KEY = 'django-insecure-hlzzhh%#2^c06&q4^_d$dd8)e3w-omsahr!iqu!tq#zs#k89v(
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
 # Allow all hosts in development, but require explicit hosts in production
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'rubye-trilinear-jameson.ngrok-free.dev', '*.ngrok.io', '*.ngrok-free.dev'] if DEBUG else []
+ALLOWED_HOSTS = ['*'] if DEBUG else []
 
 # CSRF Trusted Origins for ngrok
 CSRF_TRUSTED_ORIGINS = [
@@ -41,9 +41,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.humanize',  # Added for number formatting
-    
-    'core', # <-- YOUR NEW APP
+    'django.contrib.humanize',
+
+    'rest_framework',
+    'rest_framework_simplejwt',
+
+    'core',
 ]
 
 MIDDLEWARE = [
@@ -120,7 +123,6 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'Asia/Kolkata'  # Assuming this is for an Indian business context
 
 USE_I18N = True
-USE_L10N = True
 USE_TZ = True
 
 # Custom Settings for Data Processing and Performance
@@ -138,8 +140,8 @@ CACHES = {
 
 # Session settings
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_AGE = 86400  # 24 hours in seconds
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = 86400 * 7 # 1 week
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 
 # Static files (CSS, JavaScript, Images)
@@ -147,18 +149,36 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [
-    BASE_DIR / 'core' / 'static',
-]
+STATICFILES_DIRS = [BASE_DIR / 'core' / 'static']
+FRONTEND_DIST_DIR = BASE_DIR.parent / 'frontend' / 'dist'
+if FRONTEND_DIST_DIR.exists():
+    STATICFILES_DIRS.append(FRONTEND_DIST_DIR)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+}
+
 # Authentication settings
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'dashboard'
+LOGIN_REDIRECT_URL = '/app/new-dashboard/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 LOGOUT_URL = 'logout'
 
@@ -174,6 +194,9 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # Set to True in production
 SECURE_HSTS_PRELOAD = False  # Set to True in production
 
 # Logging Configuration
+LOGS_DIR = BASE_DIR / 'logs'
+LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -191,7 +214,7 @@ LOGGING = {
         'file': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': BASE_DIR / 'logs' / 'dashboard.log',
+            'filename': LOGS_DIR / 'dashboard.log',
             'formatter': 'verbose',
         },
         'console': {
@@ -231,3 +254,16 @@ LOGGING = {
 # We then navigate to the 'data_files' folder
 MEDIA_ROOT = BASE_DIR.parent.parent / 'data_files' 
 MEDIA_URL = '/data/' 
+
+
+# Stock / index ticker settings
+INDIAN_STOCK_API_KEY = "sk-live-yjsoVlCpKwTsEzAV4MDzqmg0S0KWF9muu3grBkgv"
+INDIAN_STOCK_API_BASE_URL = "https://stock.indianapi.in"
+
+# Map your ticker labels → API `name` values
+INDEX_NAME_MAP = {
+    "sensex": "SENSEXETF",        # adjust to exact API name if needed
+    "nifty50": "NIFTYBEES",     # adjust
+    "gold": "GOLDBEES",      
+    "alpha_strategy": "ITBEES"      # adjust (could be a gold ETF name)
+}

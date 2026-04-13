@@ -141,7 +141,7 @@
 
         .filters {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr auto;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1.5rem;
             align-items: flex-end;
         }
@@ -158,7 +158,8 @@
             font-size: 0.9rem;
         }
 
-        .filter-group select {
+        .filter-group select,
+        .filter-group input[type="date"] {
             padding: 0.75rem 1rem;
             border: 1px solid var(--border);
             border-radius: 0.5rem;
@@ -168,9 +169,12 @@
             background-color: var(--white);
             cursor: pointer;
             transition: all 0.3s ease;
+            width: 100%;
+            box-sizing: border-box;
         }
 
-        .filter-group select:focus {
+        .filter-group select:focus,
+        .filter-group input[type="date"]:focus {
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
@@ -473,7 +477,19 @@
                     </select>
                 </div>
 
-                {% if selected_rm or selected_ma or selected_manager %}
+                <div class="filter-group">
+                    <label for="date_from"><i class="far fa-calendar-alt"></i> From Date</label>
+                    <input type="date" id="date_from" name="date_from" value="{{ selected_date_from }}"
+                        onchange="this.form.submit()">
+                </div>
+
+                <div class="filter-group">
+                    <label for="date_to"><i class="far fa-calendar-alt"></i> To Date</label>
+                    <input type="date" id="date_to" name="date_to" value="{{ selected_date_to }}"
+                        onchange="this.form.submit()">
+                </div>
+
+                {% if selected_rm or selected_ma or selected_manager or selected_date_from or selected_date_to %}
                 <a href="{% url 'dashboard' %}" class="clear-button"><i class="fas fa-redo"></i> Clear Filters</a>
                 {% endif %}
             </form>
@@ -485,24 +501,10 @@
             <div class="metrics">
                 <div class="metric-card">
                     <div class="metric-label"><i class="fas fa-handshake"></i> Total Brokerage</div>
-                    <div class="metric-value">INR{{ totals.combined_total_brokerage|floatformat:0 }}</div>
+                    <div class="metric-value">{{ totals.combined_total_brokerage|floatformat:0 }}</div>
                     <div class="metric-change"><i class="fas fa-arrow-up"></i> All RMs</div>
                 </div>
-                <div class="metric-card">
-                    <div class="metric-label"><i class="fas fa-coins"></i> Equity Cash Turnover</div>
-                    <div class="metric-value">INR{{ totals.total_equity_cash|floatformat:0 }}</div>
-                    <div class="metric-change"><i class="fas fa-arrow-up"></i> Active Trading</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label"><i class="fas fa-exchange-alt"></i> Equity F&O Turnover</div>
-                    <div class="metric-value">INR{{ totals.total_equity_fno|floatformat:0 }}</div>
-                    <div class="metric-change"><i class="fas fa-arrow-up"></i> Derivatives</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-label"><i class="fas fa-chart-pie"></i> Total Turnover</div>
-                    <div class="metric-value">INR{{ totals.total_turnover|floatformat:0 }}</div>
-                    <div class="metric-change"><i class="fas fa-arrow-up"></i> Overall</div>
-                </div>
+
             </div>
         </section>
 
@@ -570,8 +572,7 @@
                                 <td><strong>{{ record.client_name }}</strong></td>
                                 <td>{{ record.rm_name }}</td>
                                 <td>{{ record.ma_name|default:"--" }}</td>
-                                <td><span style="color: var(--success);">INR{{ record.total_brokerage|floatformat:2
-                                        }}</span></td>
+                                <td><span style="color: var(--success);">INR{{ record.total_brokerage|floatformat:2 }}</span></td>
                                 <td>INR{{ record.total_equity_cash_turnover|floatformat:0 }}</td>
                                 <td>INR{{ record.total_equity_fno_turnover|floatformat:0 }}</td>
                                 <td><strong>INR{{ record.total_turnover|floatformat:0 }}</strong></td>

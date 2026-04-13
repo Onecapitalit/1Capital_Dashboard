@@ -486,9 +486,6 @@
         </div>
         <div class="nav-auth">
             {% if user.is_authenticated %}
-            <button onclick="openDataUploadModal()" class="btn btn-blue" style="margin: 0; padding: 0.75rem 1.5rem; font-size: 0.875rem;">
-                <i class="fas fa-cloud-upload-alt" style="margin-right: 0.5rem;"></i> Data Upload
-            </button>
             <a href="{% url 'dashboard' %}" class="btn btn-blue">Dashboard</a>
             <a href="{% url 'logout' %}" class="btn btn-outline">Logout</a>
             {% endif %}

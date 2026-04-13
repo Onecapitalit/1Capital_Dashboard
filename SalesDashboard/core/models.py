@@ -55,6 +55,7 @@ class UserProfile(models.Model):
     )
     
     is_active = models.BooleanField(default=True, help_text='User can login if True')
+    default_landing_tab = models.CharField(max_length=50, default='Overall', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -139,8 +140,9 @@ class Employee(models.Model):
     - Creates organizational hierarchy
     """
     
-    wire_code = models.CharField(max_length=50, unique=True, primary_key=True)
+    pan_number = models.CharField("PAN Number", max_length=20, unique=True, primary_key=True)
     rm_name = models.CharField(max_length=255, db_index=True)
+    wire_code = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     designation = models.CharField(max_length=100, null=True, blank=True)  # RM, Manager, Leader
     
     # Self-referential FK - creates manager hierarchy
@@ -175,12 +177,15 @@ class Employee(models.Model):
             models.Index(fields=['manager']),
             models.Index(fields=['email']),
             models.Index(fields=['is_active']),
+            models.Index(fields=['wire_code']),
         ]
     
     def __str__(self):
+        wire_codes = self.wire_codes.all()
+        wire_str = self.wire_code or (", ".join([wc.wire_code for wc in wire_codes]) if wire_codes else "No Wire Code")
         if self.manager:
-            return f"{self.rm_name} ({self.wire_code}) -> {self.manager.rm_name}"
-        return f"{self.rm_name} ({self.wire_code}) [Top]"
+            return f"{self.rm_name} ({wire_str}) -> {self.manager.rm_name}"
+        return f"{self.rm_name} ({wire_str}) [Top]"
     
     @property
     def get_manager(self):
@@ -237,15 +242,33 @@ class Employee(models.Model):
             chain.append(superior.rm_name)
         return " -> ".join(chain)
 
+class EmployeeWireCode(models.Model):
+    """Stores multiple wire codes associated with an employee"""
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='wire_codes')
+    wire_code = models.CharField(max_length=50, unique=True, db_index=True)
+
+    class Meta:
+        db_table = 'employee_wire_code'
+
+    def __str__(self):
+        return f"{self.wire_code} ({self.employee.rm_name})"
+
 
 class Client(models.Model):
     """Client dimension - stores client details and their assigned RM from Client_dim folder"""
     
     client_code = models.CharField(max_length=50, unique=True, primary_key=True)
     client_name = models.CharField(max_length=255, db_index=True)
-    wire_code = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True)
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='clients')
+    wire_code = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     rm_name = models.CharField(max_length=255, db_index=True)
+    ma_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     rm_manager_name = models.CharField(max_length=255, null=True, blank=True)
+    
+    # New fields
+    client_pan = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    rm_pan = models.CharField(max_length=20, null=True, blank=True)
+    aum = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     
     # Client metadata
     client_type = models.CharField(max_length=50, null=True, blank=True)  # Individual/HUF/Company etc
@@ -261,6 +284,7 @@ class Client(models.Model):
             models.Index(fields=['client_name']),
             models.Index(fields=['rm_name']),
             models.Index(fields=['wire_code']),
+            models.Index(fields=['employee']),
         ]
     
     def __str__(self):
@@ -297,6 +321,9 @@ class SalesRecord(models.Model):
     mf_brokerage = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     mf_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     
+    # Date filtering
+    transaction_date = models.DateField(null=True, blank=True, db_index=True)
+    
     # Metadata
     data_source = models.CharField(max_length=50, choices=[
         ('BROKERAGE', 'Brokerage Fact'),
@@ -316,3 +343,85 @@ class SalesRecord(models.Model):
     
     def __str__(self):
         return f"{self.client_name} - {self.rm_name} (\u20b9{self.total_brokerage})"
+
+
+class SalesRecordAAABrokerage(models.Model):
+    """
+    Specialized fact table for Non-Mutual Fund data (Trade Brokerage).
+    Uses the same logic as SalesRecord but excludes MF fields and adds client_PAN and client_city.
+    """
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='brokerage_records')
+    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name='brokerage_records')
+    
+    rm_manager_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    rm_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    ma_name = models.CharField(max_length=255, null=True, blank=True)
+    wire_code = models.CharField(max_length=50, null=True, blank=True)
+    client_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    client_pan = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    client_city = models.CharField(max_length=100, null=True, blank=True)
+    
+    total_brokerage = models.DecimalField(max_digits=15, decimal_places=2, default=0, db_index=True)
+    cash_delivery = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cash_intraday = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    equity_cash_delivery_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    equity_futures_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    equity_options_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    equity_cash_intraday_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_equity_cash_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_equity_fno_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_equity_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    
+    transaction_date = models.DateField(null=True, blank=True, db_index=True)
+    period = models.CharField(max_length=20, null=True, blank=True)
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    loaded_at = models.DateTimeField(auto_now_add=True, null=True)
+    
+    class Meta:
+        db_table = 'sales_record_AAA_brokerage'
+        indexes = [
+            models.Index(fields=['rm_name', 'total_brokerage']),
+            models.Index(fields=['client_name', 'rm_name']),
+            models.Index(fields=['period']),
+        ]
+
+    def __str__(self):
+        return f"{self.client_name} - {self.rm_name} (\u20b9{self.total_brokerage})"
+
+
+class SalesRecordMF(models.Model):
+    """
+    Specialized fact table for Mutual Fund data from Karvy and CAMS.
+    """
+    transaction_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    client_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    broker_wire_code = models.CharField(max_length=100, null=True, blank=True)
+    mf_brokerage = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    mf_turnover = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    loaded_at = models.DateTimeField(auto_now_add=True, null=True)
+    transaction_date = models.DateField(null=True, blank=True, db_index=True)
+    period = models.CharField(max_length=20, null=True, blank=True)
+    wire_code = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    client_pan = models.CharField(max_length=20, default="NO PAN", db_index=True)
+    
+    # Relationship fields
+    client = models.ForeignKey(Client, on_delete=models.SET_NULL, null=True, blank=True, related_name='mf_sales_records')
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='mf_sales_records')
+    
+    # Hierarchy fields (lookup based)
+    rm_name = models.CharField(max_length=255, default="Nitin Mude", db_index=True)
+    rm_manager_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    client_city = models.CharField(max_length=100, null=True, blank=True)
+
+    class Meta:
+        db_table = 'sales_record_MF'
+        indexes = [
+            models.Index(fields=['client_name', 'rm_name']),
+            models.Index(fields=['client_pan']),
+            models.Index(fields=['period']),
+        ]
+
+    def __str__(self):
+        return f"{self.client_name} - {self.rm_name} (\u20b9{self.mf_brokerage})"

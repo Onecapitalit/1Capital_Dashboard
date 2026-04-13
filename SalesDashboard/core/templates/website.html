@@ -29,6 +29,7 @@
             --white: #ffffff;
             --border: #e2e8f0;
             --success: #4ade80;
+            --failure: #f97373;
             --warning: #facc15;
             --info: #60a5fa;
             --font-main: 'Plus Jakarta Sans', sans-serif;
@@ -199,6 +200,10 @@
             color: var(--warning);
         }
 
+        .val-down {
+            color: var(--failure);
+        }
+
         .val-blue {
             color: var(--info);
         }
@@ -258,24 +263,7 @@
             color: var(--text-body);
         }
 
-        .portal-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 38px;
-            height: 38px;
-            background: rgba(37, 99, 235, 0.1);
-            border-radius: 12px;
-            color: var(--primary);
-            transition: all 0.3s ease;
-        }
 
-        .portal-icon:hover {
-            background: var(--primary);
-            color: #fff;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-        }
 
         .nav-links a:hover {
             color: var(--primary);
@@ -497,7 +485,7 @@
             font-weight: 700;
         }
 
-         /* =========================================
+        /* =========================================
            SECTION: CALCULATOR
            ========================================= */
         .calc-wrapper {
@@ -506,8 +494,18 @@
             border-radius: 2rem;
             border: 1px solid #334155;
         }
-        .calc-input-group { margin-bottom: 1rem; }
-        .calc-input-group label { display: block; font-size: 0.875rem; color: var(--text-light); margin-bottom: 0.5rem; }
+
+        .calc-input-group {
+            margin-bottom: 1rem;
+        }
+
+        .calc-input-group label {
+            display: block;
+            font-size: 0.875rem;
+            color: var(--text-light);
+            margin-bottom: 0.5rem;
+        }
+
         .calc-input {
             width: 100%;
             background: var(--secondary);
@@ -517,7 +515,10 @@
             color: var(--white);
             outline: none;
         }
-        .calc-input:focus { border-color: var(--primary); }
+
+        .calc-input:focus {
+            border-color: var(--primary);
+        }
 
         /* Forms */
         .form-card {
@@ -632,79 +633,7 @@
         }
 
         /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0, 0, 0, 0.6);
-            animation: fadeIn 0.3s ease;
-        }
 
-        .modal-content {
-            background-color: var(--white);
-            margin: 5% auto;
-            padding: 2rem;
-            border-radius: var(--radius-lg);
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            animation: slideDown 0.3s ease;
-        }
-
-        .close {
-            color: var(--text-light);
-            float: right;
-            font-size: 1.5rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: color 0.3s ease;
-        }
-
-        .close:hover {
-            color: var(--secondary);
-        }
-
-        .file-input-wrapper {
-            background-color: var(--primary-light);
-            transition: all 0.3s ease;
-        }
-
-        .file-input-wrapper:hover {
-            border-color: var(--primary);
-            background-color: rgba(37, 99, 235, 0.15);
-        }
-
-        .file-input-wrapper.drag-over {
-            border-color: var(--primary);
-            background-color: rgba(37, 99, 235, 0.2);
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-
-            to {
-                opacity: 1;
-            }
-        }
-
-        @keyframes slideDown {
-            from {
-                transform: translateY(-50px);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
 
         @media (max-width: 768px) {
             .hero h1 {
@@ -735,7 +664,7 @@
 <body>
 
     <div class="ticker-wrap">
-        <div class="ticker-move">
+        <!-- <div class="ticker-move">
             <div class="ticker-item">SENSEX: <span class="val-up">72,450.20 (+0.45%)</span></div>
             <div class="ticker-item">NIFTY 50: <span class="val-up">22,010.50 (+0.38%)</span></div>
             <div class="ticker-item">GOLD: <span class="val-neutral">INR62,450 (+0.12%)</span></div>
@@ -743,6 +672,36 @@
             <div class="ticker-item">SENSEX: <span class="val-up">72,450.20 (+0.45%)</span></div>
             <div class="ticker-item">NIFTY 50: <span class="val-up">22,010.50 (+0.38%)</span></div>
             <div class="ticker-item">GOLD: <span class="val-neutral">INR62,450 (+0.12%)</span></div>
+        </div> -->
+        <div class="ticker-move">
+            <div class="ticker-item">
+                SENSEX:
+                <span class="ticker-sensex val-neutral">-- (--%)</span>
+            </div>
+            <div class="ticker-item">
+                NIFTY 50:
+                <span class="ticker-nifty val-neutral">-- (--%)</span>
+            </div>
+            <div class="ticker-item">
+                GOLD:
+                <span class="ticker-gold val-neutral">-- (--%)</span>
+            </div>
+            <div class="ticker-item">
+                1CAPITAL.IN GROWTH:
+                <span class="ticker-alpha val-blue">-- (--%)</span>
+            </div>
+            <div class="ticker-item">
+                SENSEX:
+                <span class="ticker-sensex val-neutral">-- (--%)</span>
+            </div>
+            <div class="ticker-item">
+                NIFTY 50:
+                <span class="ticker-nifty val-neutral">-- (--%)</span>
+            </div>
+            <div class="ticker-item">
+                GOLD:
+                <span class="ticker-gold val-neutral">-- (--%)</span>
+            </div>
         </div>
     </div>
 
@@ -756,13 +715,11 @@
                 <a href="/about-us/">About Us</a>
                 <a href="#services">Services</a>
                 <a href="/mutual-funds/">Mutual Funds</a>
+                <a href="/mf-advisor/">MF Advisor</a>
                 <a href="/pms-aif/">PMS & AIF</a>
                 <a href="#contact">Contact</a>
             </div>
             <div class="nav-auth">
-                <a href="/upload-portal/login/" class="portal-icon" title="Data Upload Portal">
-                    <i class="fas fa-cloud-upload-alt"></i>
-                </a>
             </div>
         </div>
     </nav>
@@ -778,9 +735,11 @@
                 <div class="hero-actions">
                     {% if not user.is_authenticated %}
                     <a href="{% url 'login' %}" class="btn btn-primary btn-lg">Get Started</a>
+                    <a href="/mf-advisor/" class="btn btn-blue btn-lg">MF Recommendation</a>
                     <a href="#contact" class="btn btn-outline btn-lg">Contact Us</a>
                     {% else %}
                     <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg">Go to Dashboard</a>
+                    <a href="/mf-advisor/" class="btn btn-blue btn-lg">MF Recommendation</a>
                     {% endif %}
                 </div>
             </div>
@@ -889,7 +848,8 @@
                     <li><i class="fas fa-check check-icon"></i> Mobile & Desktop Access</li>
                 </ul>
                 {% if not user.is_authenticated %}
-                <a href="{% url 'login' %}" class="btn btn-blue">Try Live Demo</a>
+                <a href="https://play.google.com/store/apps/details?id=com.dwt.capital1" class="btn btn-blue"
+                    target="_blank">Try Live Demo</a>
                 {% endif %}
             </div>
 
@@ -1040,7 +1000,7 @@
         </div>
     </section>
 
-     <section class="dark-section">
+    <section class="dark-section">
         <div class="container" style="max-width: 900px;">
             <h2 class="text-center">SIP Calculator</h2>
             <div class="calc-wrapper">
@@ -1065,7 +1025,8 @@
                     </div>
                     <div class="dash-stat-box">
                         <div style="font-size: 0.75rem; color: var(--text-light);">Est. Returns</div>
-                        <div style="font-size: 1.25rem; font-weight: 700; color: var(--success);" id="estReturns">INR0</div>
+                        <div style="font-size: 1.25rem; font-weight: 700; color: var(--success);" id="estReturns">INR0
+                        </div>
                     </div>
                     <div style="background-color: var(--primary); padding: 0.75rem; border-radius: 0.75rem;">
                         <div style="font-size: 0.75rem; color: #bfdbfe;">Total Value</div>
@@ -1082,11 +1043,11 @@
             const P = parseFloat(document.getElementById('monthly').value);
             const r = parseFloat(document.getElementById('rate').value) / 100 / 12;
             const n = parseFloat(document.getElementById('years').value) * 12;
-            
+
             if (P && r && n) {
                 const fv = P * (((Math.pow(1 + r, n)) - 1) / r) * (1 + r);
                 const invested = P * n;
-                
+
                 document.getElementById('totalInvested').innerText = "INR" + Math.round(invested).toLocaleString('en-IN');
                 document.getElementById('estReturns').innerText = "INR" + Math.round(fv - invested).toLocaleString('en-IN');
                 document.getElementById('totalVal').innerText = "INR" + Math.round(fv).toLocaleString('en-IN');
@@ -1100,7 +1061,7 @@
             const stars = document.querySelectorAll('#starWidget .star-interactive');
             document.getElementById('ratingValue').value = n;
             stars.forEach((star, index) => {
-                if(index < n) {
+                if (index < n) {
                     star.classList.add('active');
                     star.setAttribute('fill', 'currentColor');
                 } else {
@@ -1160,17 +1121,47 @@
     </section>
 
     <!-- Footer -->
-    <footer class="footer">
+    <footer id="contact" class="footer">
         <div class="container">
             <div class="grid grid-4" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 4rem;">
                 <div>
-                    <h4 style="margin-bottom: 1.5rem;">About 1capital.in</h4>
-                    <ul class="footer-links">
-                        <li><a href="#">About Us</a></li>
-                        <li><a href="#">Our Team</a></li>
-                        <li><a href="#">Careers</a></li>
-                        <li><a href="#">Blog</a></li>
-                    </ul>
+                    <div class="logo"
+                        style="margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 900; letter-spacing: -1px; color: var(--white);">
+                        One<span style="color: var(--primary);">Capital</span></div>
+                    <p style="color: var(--text-light); line-height: 1.8; margin-bottom: 1.5rem;">Prominent equity
+                        advisory and brokerage firm empowering investors globally.</p>
+
+                    <style>
+                        .social-icon.whatsapp i {
+                            color: #25D366 !important;
+                        }
+                    </style>
+
+                    <div style="display: flex; gap: 0.75rem;">
+                        <a href="https://x.com/1Capital_xyz" target="_blank" class="social-icon">
+                            <i data-lucide="twitter" width="16"></i>
+                        </a>
+
+                        <a href="https://www.linkedin.com/in/1-capital-1777333b1?utm_source=share_via&utm_content=profile&utm_medium=member_android"
+                            target="_blank" class="social-icon">
+                            <i data-lucide="linkedin" width="16"></i>
+                        </a>
+
+                        <a href="https://www.instagram.com/1_capital_?igsh=MTE0cWllNmwyZjM2Ng==" target="_blank"
+                            class="social-icon">
+                            <i data-lucide="instagram" width="16"></i>
+                        </a>
+
+                        <a href="https://www.facebook.com/people/1Capital/61564197167565/" target="_blank"
+                            class="social-icon">
+                            <i data-lucide="facebook" width="16"></i>
+                        </a>
+
+                        <a href="https://wa.me/918484895622?text=Hello%20One%20Capital,%20I%20want%20investment%20guidance."
+                            target="_blank" class="social-icon whatsapp">
+                            <i data-lucide="message-circle" width="16"></i>
+                        </a>
+                    </div>
                 </div>
                 <div>
                     <h4 style="margin-bottom: 1.5rem;">Services</h4>
@@ -1194,9 +1185,10 @@
                     <h4 style="margin-bottom: 1.5rem;">Quick Links</h4>
                     <ul class="footer-links">
                         <li><a href="{% url 'dashboard' %}" target="_blank">Business Dashboard</a></li>
-                        <li><a href="#">About Us</a></li>
+                        <li><a href="/about-us/">About Us</a></li>
                         <li><a href="#">Contact</a></li>
-                        <li><a href="#">Support</a></li>
+                        <li><a href="/upload-portal/login/" style="font-weight: 600; color: var(--primary);">Data Upload
+                                Portal</a></li>
                     </ul>
                 </div>
             </div>
@@ -1206,90 +1198,7 @@
         </div>
     </footer>
 
-    <!-- Data Upload Modal -->
-    <div id="dataUploadModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeDataUploadModal()">&times;</span>
-            <h2 style="text-align: center; margin-bottom: 2rem; color: var(--secondary);">Upload Sales Data</h2>
 
-            <form id="dataUploadForm" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div style="margin-bottom: 1.5rem;">
-                    <label
-                        style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--secondary);">Select
-                        Data Type:</label>
-                    <select name="data_type" id="dataType" required
-                        style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem; font-size: 1rem;">
-                        <option value="">-- Choose Data Type --</option>
-                        <option value="brokerage">Brokerage Fact Data</option>
-                        <option value="mf">Mutual Fund (MF) Fact Data</option>
-                        <option value="employee">Employee Dimension Data</option>
-                        <option value="client">Client Dimension Data</option>
-                    </select>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <label
-                        style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--secondary);">Upload
-                        Mode:</label>
-                    <div style="display: flex; gap: 1rem;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="radio" name="uploadMode" id="singleFileMode" value="file" checked
-                                onchange="switchUploadMode('file')" style="cursor: pointer;">
-                            <span style="color: var(--secondary);">Single File</span>
-                        </label>
-                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                            <input type="radio" name="uploadMode" id="folderMode" value="folder"
-                                onchange="switchUploadMode('folder')" style="cursor: pointer;">
-                            <span style="color: var(--secondary);">Folder</span>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Single File Upload -->
-                <div id="singleFileSection" style="margin-bottom: 1.5rem;">
-                    <label
-                        style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--secondary);">Select
-                        File (CSV or Excel):</label>
-                    <div class="file-input-wrapper" id="singleFileWrapper"
-                        style="border: 2px dashed var(--border); border-radius: 0.5rem; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.3s ease;">
-                        <input type="file" name="data_file" id="dataFile" accept=".csv,.xlsx,.xls"
-                            style="display: none;">
-                        <i class="fas fa-file-upload"
-                            style="font-size: 2rem; color: var(--primary); margin-bottom: 1rem; display: block;"></i>
-                        <p id="singleFileLabel" style="margin: 0; color: var(--text-body);">Click to select file or drag
-                            & drop</p>
-                    </div>
-                </div>
-
-                <!-- Folder Upload -->
-                <div id="folderSection" style="margin-bottom: 1.5rem; display: none;">
-                    <label
-                        style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: var(--secondary);">Select
-                        Folder (CSV or Excel files):</label>
-                    <div class="file-input-wrapper" id="folderWrapper"
-                        style="border: 2px dashed var(--border); border-radius: 0.5rem; padding: 2rem; text-align: center; cursor: pointer; transition: all 0.3s ease;">
-                        <input type="file" name="data_files" id="dataFolder" webkitdirectory directory multiple
-                            style="display: none;">
-                        <i class="fas fa-folder-open"
-                            style="font-size: 2rem; color: var(--primary); margin-bottom: 1rem; display: block;"></i>
-                        <p id="folderLabel" style="margin: 0; color: var(--text-body);">Click to select folder or drag &
-                            drop</p>
-                    </div>
-                </div>
-
-                <div id="uploadMessage"
-                    style="margin-bottom: 1.5rem; display: none; padding: 1rem; border-radius: 0.5rem; font-weight: 600;">
-                </div>
-
-                <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-bottom: 1rem;">
-                    <i class="fas fa-upload" style="margin-right: 0.5rem;"></i> Upload Data
-                </button>
-                <button type="button" class="btn" onclick="closeDataUploadModal()"
-                    style="width: 100%; background-color: var(--border); color: var(--secondary);">Cancel</button>
-            </form>
-        </div>
-    </div>
 
     <script>
         lucide.createIcons();
@@ -1345,257 +1254,90 @@
             alert('Thank you for reaching out! We will contact you shortly.');
             event.target.reset();
         }
+    </script>
 
-        // Data Upload Modal Functions
-        function openDataUploadModal() {
-            document.getElementById('dataUploadModal').style.display = 'block';
-        }
-
-        function closeDataUploadModal() {
-            document.getElementById('dataUploadModal').style.display = 'none';
-            document.getElementById('dataUploadForm').reset();
-            document.getElementById('singleFileLabel').textContent = 'Click to select file or drag & drop';
-            document.getElementById('folderLabel').textContent = 'Click to select folder or drag & drop';
-            document.getElementById('uploadMessage').style.display = 'none';
-            // Reset to single file mode
-            document.getElementById('singleFileMode').checked = true;
-            switchUploadMode('file');
-        }
-
-        // Close modal when clicking outside
-        window.onclick = function (event) {
-            const modal = document.getElementById('dataUploadModal');
-            if (event.target === modal) {
-                closeDataUploadModal();
-            }
-        }
-
-        // Upload mode switching
-        function switchUploadMode(mode) {
-            const singleFileSection = document.getElementById('singleFileSection');
-            const folderSection = document.getElementById('folderSection');
-            const singleFileInput = document.getElementById('dataFile');
-            const folderInput = document.getElementById('dataFolder');
-
-            if (mode === 'file') {
-                singleFileSection.style.display = 'block';
-                folderSection.style.display = 'none';
-                singleFileInput.setAttribute('required', '');
-                folderInput.removeAttribute('required');
-            } else {
-                singleFileSection.style.display = 'none';
-                folderSection.style.display = 'block';
-                singleFileInput.removeAttribute('required');
-                folderInput.setAttribute('required', '');
-            }
-        }
-
-        // File input handling for Single File
-        const singleFileInput = document.getElementById('dataFile');
-        const singleFileWrapper = document.getElementById('singleFileWrapper');
-        const singleFileLabel = document.getElementById('singleFileLabel');
-
-        singleFileWrapper.addEventListener('click', () => singleFileInput.click());
-
-        singleFileInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                singleFileLabel.textContent = e.target.files[0].name;
-            }
-        });
-
-        // Drag and drop for Single File
-        singleFileWrapper.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            singleFileWrapper.classList.add('drag-over');
-        });
-
-        singleFileWrapper.addEventListener('dragleave', () => {
-            singleFileWrapper.classList.remove('drag-over');
-        });
-
-        singleFileWrapper.addEventListener('drop', (e) => {
-            e.preventDefault();
-            singleFileWrapper.classList.remove('drag-over');
-            if (e.dataTransfer.files.length > 0) {
-                singleFileInput.files = e.dataTransfer.files;
-                singleFileLabel.textContent = e.dataTransfer.files[0].name;
-            }
-        });
-
-        // File input handling for Folder
-        const folderInput = document.getElementById('dataFolder');
-        const folderWrapper = document.getElementById('folderWrapper');
-        const folderLabel = document.getElementById('folderLabel');
-
-        folderWrapper.addEventListener('click', () => folderInput.click());
-
-        folderInput.addEventListener('change', (e) => {
-            if (e.target.files.length > 0) {
-                folderLabel.textContent = `${e.target.files.length} file(s) selected`;
-            }
-        });
-
-        // Drag and drop for Folder
-        folderWrapper.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            folderWrapper.classList.add('drag-over');
-        });
-
-        folderWrapper.addEventListener('dragleave', () => {
-            folderWrapper.classList.remove('drag-over');
-        });
-
-        folderWrapper.addEventListener('drop', (e) => {
-            e.preventDefault();
-            folderWrapper.classList.remove('drag-over');
-            if (e.dataTransfer.items.length > 0) {
-                folderInput.files = e.dataTransfer.files;
-                folderLabel.textContent = `${e.dataTransfer.files.length} file(s) selected`;
-            }
-        });
-
-        // Form submission
-        document.getElementById('dataUploadForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const uploadMode = document.querySelector('input[name="uploadMode"]:checked').value;
-            const dataType = document.getElementById('dataType').value;
-            const uploadMessage = document.getElementById('uploadMessage');
-            const submitButton = document.querySelector('#dataUploadForm button[type="submit"]');
-
-            if (!dataType) {
-                uploadMessage.style.display = 'block';
-                uploadMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                uploadMessage.style.color = '#ef4444';
-                uploadMessage.textContent = '&#10007; Please select a data type';
-                return;
-            }
-
-            let files = [];
-            if (uploadMode === 'file') {
-                files = document.getElementById('dataFile').files;
-                if (files.length === 0) {
-                    uploadMessage.style.display = 'block';
-                    uploadMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                    uploadMessage.style.color = '#ef4444';
-                    uploadMessage.textContent = '&#10007; Please select a file';
-                    return;
-                }
-            } else {
-                files = document.getElementById('dataFolder').files;
-                if (files.length === 0) {
-                    uploadMessage.style.display = 'block';
-                    uploadMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                    uploadMessage.style.color = '#ef4444';
-                    uploadMessage.textContent = '&#10007; Please select a folder';
-                    return;
-                }
-            }
-
+    <script>
+        async function loadTickerData() {
             try {
-                submitButton.disabled = true;
-                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-
-                // For single file mode, upload one file at a time
-                if (uploadMode === 'file') {
-                    const formData = new FormData();
-                    formData.append('data_type', dataType);
-                    formData.append('data_file', files[0]);
-                    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-
-                    const response = await fetch('{% url "data_upload" %}', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    const data = await response.json();
-                    uploadMessage.style.display = 'block';
-
-                    if (response.ok && data.success) {
-                        uploadMessage.style.backgroundColor = 'rgba(74, 222, 128, 0.1)';
-                        uploadMessage.style.color = 'var(--success)';
-                        uploadMessage.textContent = '[OK] ' + data.message;
-
-                        setTimeout(() => {
-                            closeDataUploadModal();
-                            location.reload();
-                        }, 2000);
-                    } else {
-                        uploadMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                        uploadMessage.style.color = '#ef4444';
-                        uploadMessage.textContent = '&#10007; ' + (data.message || 'Error uploading file');
-                    }
-                } else {
-                    // For folder mode, upload each file individually
-                    let successCount = 0;
-                    let failCount = 0;
-
-                    uploadMessage.style.display = 'block';
-                    uploadMessage.style.backgroundColor = 'rgba(37, 99, 235, 0.1)';
-                    uploadMessage.style.color = '#2563eb';
-                    uploadMessage.textContent = `&#128193; Processing 0/${files.length} files...`;
-
-                    for (let i = 0; i < files.length; i++) {
-                        const file = files[i];
-
-                        // Only upload valid data files
-                        const validExtensions = ['.csv', '.xlsx', '.xls'];
-                        const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-
-                        if (!validExtensions.includes(fileExt)) {
-                            failCount++;
-                            continue;
-                        }
-
-                        const formData = new FormData();
-                        formData.append('data_type', dataType);
-                        formData.append('data_file', file);
-                        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-
-                        try {
-                            const response = await fetch('{% url "data_upload" %}', {
-                                method: 'POST',
-                                body: formData
-                            });
-
-                            if (response.ok) {
-                                successCount++;
-                            } else {
-                                failCount++;
-                            }
-                        } catch (error) {
-                            failCount++;
-                        }
-
-                        // Update progress
-                        uploadMessage.textContent = `&#128193; Processing ${successCount + failCount}/${files.length} files...`;
-                    }
-
-                    uploadMessage.style.display = 'block';
-                    if (failCount === 0) {
-                        uploadMessage.style.backgroundColor = 'rgba(74, 222, 128, 0.1)';
-                        uploadMessage.style.color = 'var(--success)';
-                        uploadMessage.textContent = `[OK] Successfully uploaded all ${successCount} file(s)`;
-
-                        setTimeout(() => {
-                            closeDataUploadModal();
-                            location.reload();
-                        }, 2000);
-                    } else {
-                        uploadMessage.style.backgroundColor = 'rgba(250, 204, 21, 0.1)';
-                        uploadMessage.style.color = '#facc15';
-                        uploadMessage.textContent = `&#9888; Uploaded ${successCount} file(s), ${failCount} failed`;
-                    }
+                const res = await fetch("/api/market-ticker/");
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                const payload = await res.json();
+                if (payload.error || !payload.data) {
+                    console.error("Ticker API error:", payload.error);
+                    return;
                 }
-            } catch (error) {
-                uploadMessage.style.display = 'block';
-                uploadMessage.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                uploadMessage.style.color = '#ef4444';
-                uploadMessage.textContent = '&#10007; Error: ' + error.message;
-            } finally {
-                submitButton.disabled = false;
-                submitButton.innerHTML = '<i class="fas fa-upload" style="margin-right: 0.5rem;"></i> Upload Data';
+                const data = payload.data;
+
+                // function updateElement(id, item) {
+                //     const el = document.getElementById(id);
+                //     if (!el || !item) return;
+
+                //     const val = Number(item.value);
+                //     const change = Number(item.change);
+
+                //     const formattedVal = isNaN(val)
+                //         ? "--"
+                //         : val.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+                //     const formattedChange = isNaN(change)
+                //         ? "--"
+                //         : change.toFixed(2);
+
+                //     el.textContent = `${formattedVal} (${formattedChange}%)`;
+
+                //     el.classList.remove("val-up", "val-down", "val-neutral");
+                //     if (!isNaN(change)) {
+                //         if (change > 0) el.classList.add("val-up");
+                //         else if (change < 0) el.classList.add("val-down");
+                //         else el.classList.add("val-neutral");
+                //     } else {
+                //         el.classList.add("val-neutral");
+                //     }
+                // }
+
+                function updateElements(selector, item) {
+                    const elements = document.querySelectorAll(selector);
+                    if (!elements.length || !item) return;
+
+                    const val = Number(item.value);
+                    const change = Number(item.change);
+
+                    const formattedVal = isNaN(val)
+                        ? "--"
+                        : val.toLocaleString("en-IN", { maximumFractionDigits: 2 });
+                    const formattedChange = isNaN(change)
+                        ? "--"
+                        : change.toFixed(2);
+
+                    elements.forEach(el => {
+                        el.textContent = `${formattedVal} (${formattedChange}%)`;
+
+                        el.classList.remove("val-up", "val-down", "val-neutral");
+                        if (!isNaN(change)) {
+                            if (change > 0) el.classList.add("val-up");
+                            else if (change < 0) el.classList.add("val-down");
+                            else el.classList.add("val-neutral");
+                        } else {
+                            el.classList.add("val-neutral");
+                        }
+                    });
+                }
+
+                // updateElement("ticker-sensex", data.sensex);
+                // updateElement("ticker-nifty", data.nifty50);
+                // updateElement("ticker-gold", data.gold);
+                // updateElement("ticker-alpha", data.alpha_strategy);
+                updateElements(".ticker-sensex", data.sensex);
+                updateElements(".ticker-nifty", data.nifty50);
+                updateElements(".ticker-gold", data.gold);
+                updateElements(".ticker-alpha", data.alpha_strategy);
+            } catch (err) {
+                console.error("Failed to load ticker data:", err);
             }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            loadTickerData();
+            setInterval(loadTickerData, 3 * 60 * 60 * 1000); // refresh every 60s
         });
     </script>
 
