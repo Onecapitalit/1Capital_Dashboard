@@ -19,7 +19,7 @@ SECRET_KEY = 'django-insecure-hlzzhh%#2^c06&q4^_d$dd8)e3w-omsahr!iqu!tq#zs#k89v(
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
 # Allow all hosts in development, but require explicit hosts in production
-ALLOWED_HOSTS = ['*'] if DEBUG else ['demo.1capital.in', '1capital.in', '72.61.141.247', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['*'] if DEBUG else ['demo.1capital.in', '1capital.in', '.1capital.in', '*.1capital.in' '72.61.141.247', 'localhost', '127.0.0.1']
 
 # CSRF Trusted Origins
 CSRF_TRUSTED_ORIGINS = [
