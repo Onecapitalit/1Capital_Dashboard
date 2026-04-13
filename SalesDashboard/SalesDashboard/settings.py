@@ -19,14 +19,14 @@ SECRET_KEY = 'django-insecure-hlzzhh%#2^c06&q4^_d$dd8)e3w-omsahr!iqu!tq#zs#k89v(
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
 # Allow all hosts in development, but require explicit hosts in production
-ALLOWED_HOSTS = ['*'] if DEBUG else ['demo.1capital.in', '72.61.141.247', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['*'] if DEBUG else ['demo.1capital.in', '1capital.in', '72.61.141.247', 'localhost', '127.0.0.1']
 
-# CSRF Trusted Origins for ngrok
+# CSRF Trusted Origins
 CSRF_TRUSTED_ORIGINS = [
-    'https://rubye-trilinear-jameson.ngrok-free.dev',
+    'https://demo.1capital.in',
+    'https://1capital.in',
     'https://*.ngrok-free.dev',
     'https://*.ngrok.io',
-    'https://demo.1capital.in',
 ]
 
 # INTERNAL_IPS for debug toolbar (only used if installed)
@@ -190,9 +190,13 @@ CSRF_COOKIE_SECURE = False  # Set to True in production
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = 0  # Set to at least 31536000 in production
-SECURE_HSTS_INCLUDE_SUBDOMAINS = False  # Set to True in production
-SECURE_HSTS_PRELOAD = False  # Set to True in production
+SECURE_HSTS_SECONDS = 0 
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
+
+# Reverse Proxy Settings
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Logging Configuration
 LOGS_DIR = BASE_DIR / 'logs'
