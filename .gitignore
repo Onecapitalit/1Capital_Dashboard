@@ -23,9 +23,6 @@ frontend/dist/
 .eslintcache
 
 # Data / Temporary Files
-data_files/
-*.csv
-*.xlsx
 staticfiles/
 *.bak
 *.json_backup
