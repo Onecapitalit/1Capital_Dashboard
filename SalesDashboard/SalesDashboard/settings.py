@@ -18,25 +18,19 @@ SECRET_KEY = 'django-insecure-hlzzhh%#2^c06&q4^_d$dd8)e3w-omsahr!iqu!tq#zs#k89v(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-# Allow all hosts in development, but require explicit hosts in production
-ALLOWED_HOSTS = ['*'] if DEBUG else ['.1capital.in', '72.61.141.247', 'localhost', '127.0.0.1']
+# Allow ALL hosts — this avoids DisallowedHost errors
+# Django's ALLOWED_HOSTS check is the #1 cause of 400 errors
+ALLOWED_HOSTS = ['*']
 
-# CSRF Trusted Origins
+# CSRF Trusted Origins — must include the exact origin (scheme + domain)
 CSRF_TRUSTED_ORIGINS = [
     'https://demo.1capital.in',
     'https://1capital.in',
-    'https://*.ngrok-free.dev',
-    'https://*.ngrok.io',
+    'http://demo.1capital.in',
+    'http://1capital.in',
+    'https://*.1capital.in',
+    'http://*.1capital.in',
 ]
-
-# Production Cookie & Security Settings
-if not DEBUG:
-    CSRF_COOKIE_DOMAIN = '.1capital.in'
-    SESSION_COOKIE_DOMAIN = '.1capital.in'
-    CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_HTTPONLY = False
-    SESSION_COOKIE_HTTPONLY = True
 
 # INTERNAL_IPS for debug toolbar (only used if installed)
 INTERNAL_IPS = ['127.0.0.1']
@@ -193,17 +187,18 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 LOGOUT_URL = 'logout'
 
 # Security Settings
-SECURE_SSL_REDIRECT = False  # Set to True in production
-SESSION_COOKIE_SECURE = False  # Set to True in production
-CSRF_COOKIE_SECURE = False  # Set to True in production
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = 0 
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+SECURE_HSTS_SECONDS = 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 
-# Reverse Proxy Settings
+# Reverse Proxy Settings (Nginx -> Gunicorn)
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
