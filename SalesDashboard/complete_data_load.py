@@ -81,6 +81,19 @@ print("-"*100)
 special_mf_count = dp._load_specialized_mf_facts()
 print(f"[OK] Specialized MF Records Loaded: {special_mf_count}")
 
+# Step 5d: Load specialized client dimensions (WealthMagic & PMS/AIF)
+print("\n[5d/7] Loading Specialized Client Dimensions...")
+print("-"*100)
+wm_count = dp._load_wealthmagic_clients()
+print(f"[OK] WealthMagic Clients Loaded: {wm_count}")
+pms_client_count = dp._load_pms_aif_clients()
+print(f"[OK] PMS/AIF Clients Loaded: {pms_client_count}")
+
+# Step 5e: Load PMS/AIF sales records
+print("\n[5e/7] Loading PMS/AIF Sales Records...")
+print("-"*100)
+pms_aif_sales_count = dp._load_pms_aif_sales_records()
+print(f"[OK] PMS/AIF Sales Records Loaded: {pms_aif_sales_count}")
 
 # Step 6: Create/Update all users
 print(f"\n[6/7] Creating User Accounts...")
