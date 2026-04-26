@@ -94,10 +94,22 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
         'CONN_MAX_AGE': 600,  # Connection persistence in seconds
         'OPTIONS': {
-            'timeout': 20,  # Database connection timeout in seconds
+            'timeout': 60,  # Increased timeout to 60s to handle long ETL locks
         }
     }
 }
+
+# Enable SQLite WAL mode for better concurrency
+from django.db.backends.signals import connection_created
+from django.dispatch import receiver
+
+@receiver(connection_created)
+def set_sqlite_pragma(sender, connection, **kwargs):
+    if connection.vendor == 'sqlite':
+        cursor = connection.cursor()
+        cursor.execute('PRAGMA journal_mode=WAL;')
+        cursor.execute('PRAGMA synchronous=NORMAL;')
+
 
 
 # Password validation

@@ -92,6 +92,21 @@ class DataFileHandler(FileSystemEventHandler):
                 count = self.pipeline._load_mf_facts()
                 logger.info(f"[MF] [OK] Loaded {count} MF records")
             
+            elif folder_name == 'WealthMagic':
+                logger.info(f"[WealthMagic] Processing: {file_path_obj.name}")
+                count = self.pipeline._load_wealthmagic_clients()
+                logger.info(f"[WealthMagic] [OK] Loaded {count} clients")
+                
+            elif folder_name == 'PMS_AIF':
+                logger.info(f"[PMS_AIF] Processing: {file_path_obj.name}")
+                count = self.pipeline._load_pms_aif_clients()
+                logger.info(f"[PMS_AIF] [OK] Loaded {count} clients")
+                
+            elif folder_name in ['AIF', 'PMS'] or 'PMSAIF' in str(file_path_obj):
+                logger.info(f"[PMSAIF Sales] Processing: {file_path_obj.name}")
+                count = self.pipeline._load_pms_aif_sales_records()
+                logger.info(f"[PMSAIF Sales] [OK] Loaded {count} records")
+            
             else:
                 logger.debug(f"File in folder '{folder_name}' - skipping auto-load")
         
@@ -117,6 +132,9 @@ class AutoDataLoader:
         self.pipeline = DataPipeline()
         self.brokerage_path = self.pipeline.brokerage_fact_path
         self.mf_path = self.pipeline.mf_fact_path
+        self.wm_path = self.pipeline.client_dim_path / 'WealthMagic'
+        self.pms_path = self.pipeline.client_dim_path / 'PMS_AIF'
+        self.pmsaif_sales_path = self.pipeline.project_root / 'data_files' / 'PMSAIF'
     
     def start(self):
         """Start watching folders"""
@@ -140,6 +158,21 @@ class AutoDataLoader:
             self.observer.schedule(event_handler, str(self.mf_path), recursive=False)
         else:
             logger.warning(f"[MISSING] Folder not found: {self.mf_path}")
+
+        # Watch WealthMagic folder
+        if self.wm_path.exists():
+            logger.info(f"[WATCH] Watching: {self.wm_path}")
+            self.observer.schedule(event_handler, str(self.wm_path), recursive=False)
+        
+        # Watch PMS_AIF folder
+        if self.pms_path.exists():
+            logger.info(f"[WATCH] Watching: {self.pms_path}")
+            self.observer.schedule(event_handler, str(self.pms_path), recursive=False)
+
+        # Watch PMSAIF sales data folder (recursive to catch subfolders AIF and PMS)
+        if self.pmsaif_sales_path.exists():
+            logger.info(f"[WATCH] Watching: {self.pmsaif_sales_path}")
+            self.observer.schedule(event_handler, str(self.pmsaif_sales_path), recursive=True)
         
         self.observer.start()
         logger.info("\n[OK] File watcher is now active!")

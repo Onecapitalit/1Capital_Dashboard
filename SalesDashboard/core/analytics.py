@@ -24,7 +24,6 @@ class BrokerageAnalytics:
             selected_ma = filters['ma_name']
             if is_mf:
                 # Robust MA lookup: 1. Client Link, 2. Employee Link, 3. Wire Code Mapping
-                # We need to find all wire codes associated with this MA to include them in the filter
                 try:
                     ma_emp = Employee.objects.get(rm_name=selected_ma)
                     ma_wire_codes = list(ma_emp.wire_codes.values_list('wire_code', flat=True))
@@ -39,7 +38,10 @@ class BrokerageAnalytics:
                 except Employee.DoesNotExist:
                     queryset = queryset.filter(Q(client__ma_name=selected_ma) | Q(employee__rm_name=selected_ma))
             else:
-                queryset = queryset.filter(ma_name=selected_ma)
+                # For non-MF (AAA and PMSAIF)
+                # SalesRecordPMSAIF doesn't have ma_name in fact table, but ClientPMSAIF does.
+                # However, for now we filter by fact table's rm_name if MA is selected and we assume MA is an RM too
+                queryset = queryset.filter(Q(rm_name=selected_ma) | Q(ma_name=selected_ma) if hasattr(queryset.model, 'ma_name') else Q(rm_name=selected_ma))
         elif filters.get('rm_name'):
             queryset = queryset.filter(rm_name=filters['rm_name'])
         elif filters.get('rm_manager_name'):
@@ -54,6 +56,13 @@ class BrokerageAnalytics:
             
         if filters.get('wire_code'):
             queryset = queryset.filter(wire_code=filters['wire_code'])
+
+        if filters.get('operational_city'):
+            city = filters['operational_city']
+            if city != "All":
+                # Filter by employees in this city
+                city_rm_names = Employee.objects.filter(operational_city=city).values_list('rm_name', flat=True)
+                queryset = queryset.filter(rm_name__in=city_rm_names)
 
         if filters.get('date_from'):
             queryset = queryset.filter(transaction_date__gte=filters['date_from'])

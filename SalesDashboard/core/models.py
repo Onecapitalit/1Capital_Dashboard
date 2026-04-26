@@ -167,6 +167,9 @@ class Employee(models.Model):
     # Status
     is_active = models.BooleanField(default=True, db_index=True)
     
+    # New Field: Operational City
+    operational_city = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -178,8 +181,35 @@ class Employee(models.Model):
             models.Index(fields=['email']),
             models.Index(fields=['is_active']),
             models.Index(fields=['wire_code']),
+            models.Index(fields=['operational_city']),
         ]
     
+    def save(self, *args, **kwargs):
+        """Override save to implement operational_city logic based on hierarchy"""
+        # Logic for operational_city
+        if self.rm_name == "Nitin Mude":
+            self.operational_city = "All"
+        elif self.rm_name in ["Samir Supsande", "Niyaz Sheikh"]:
+            self.operational_city = "Nagpur"
+        else:
+            # Check hierarchy for managers or reporting chain
+            superiors = self.get_all_superiors()
+            superior_names = [s.rm_name for s in superiors]
+            
+            # Check Nagpur branch first (if they report to Samir or Niyaz)
+            if any(name in ["Samir Supsande", "Niyaz Sheikh"] for name in superior_names):
+                self.operational_city = "Nagpur"
+            # Check other managers
+            elif self.rm_name == "Abhijeet Mane" or "Abhijeet Mane" in superior_names:
+                self.operational_city = "Kolhapur"
+            elif self.rm_name == "Harshal Ghatage" or "Harshal Ghatage" in superior_names:
+                self.operational_city = "Pune"
+            elif self.rm_name == "Suhas Tare" or "Suhas Tare" in superior_names:
+                self.operational_city = "Nashik"
+            # Default or keep existing if no match (though hierarchy should cover most)
+            
+        super().save(*args, **kwargs)
+
     def __str__(self):
         wire_codes = self.wire_codes.all()
         wire_str = self.wire_code or (", ".join([wc.wire_code for wc in wire_codes]) if wire_codes else "No Wire Code")
@@ -425,3 +455,80 @@ class SalesRecordMF(models.Model):
 
     def __str__(self):
         return f"{self.client_name} - {self.rm_name} (\u20b9{self.mf_brokerage})"
+
+
+class ClientWealthMagic(models.Model):
+    """Client dimension for WealthMagic data source"""
+    client_code = models.CharField(max_length=50, db_index=True)
+    client_name = models.CharField(max_length=255, db_index=True)
+    rm_name = models.CharField(max_length=255, db_index=True)
+    rm_manager_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    onboarded_on = models.DateField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    wire_code = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    aum = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    client_pan = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    rm_pan = models.CharField(max_length=20, null=True, blank=True)
+
+    class Meta:
+        db_table = 'client_dimension_wealthmagic'
+        unique_together = ('client_code', 'client_name', 'rm_name')
+
+    def __str__(self):
+        return f"{self.client_name} ({self.client_code}) - WealthMagic"
+
+
+class ClientPMSAIF(models.Model):
+    """Client dimension for PMS/AIF data source"""
+    client_code = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    client_name = models.CharField(max_length=255, db_index=True)
+    rm_name = models.CharField(max_length=255, db_index=True)
+    rm_manager_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    onboarded_on = models.DateField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    wire_code = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    aum = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    client_pan = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    rm_pan = models.CharField(max_length=20, null=True, blank=True)
+    ma_name = models.CharField(max_length=255, null=True, blank=True)
+    ma_pan = models.CharField(max_length=20, null=True, blank=True)
+
+    class Meta:
+        db_table = 'client_dimension_PMSAIF'
+        unique_together = ('client_code', 'client_name', 'rm_name')
+
+    def __str__(self):
+        return f"{self.client_name} ({self.client_code}) - PMS/AIF"
+
+
+class SalesRecordPMSAIF(models.Model):
+    """Fact table for PMS and AIF sales records"""
+    client_code = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    client_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    client_pan = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    scheme_name = models.CharField(max_length=255, null=True, blank=True)
+    broker_code = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    type = models.CharField(max_length=10, choices=[('pms', 'PMS'), ('aif', 'AIF')], db_index=True)
+    rm_pan = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    rm_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    rm_manager_name = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    pms_aum = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    aif_aum = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    transaction_date = models.DateField(null=True, blank=True, db_index=True)
+    
+    # Metadata
+    file_name = models.CharField(max_length=255, null=True, blank=True)
+    period = models.CharField(max_length=20, null=True, blank=True)
+    loaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'sales_record_PMSAIF'
+        indexes = [
+            models.Index(fields=['client_pan', 'type']),
+            models.Index(fields=['rm_name']),
+            models.Index(fields=['period']),
+        ]
+
+    def __str__(self):
+        return f"{self.client_name} - {self.scheme_name} ({self.type})"

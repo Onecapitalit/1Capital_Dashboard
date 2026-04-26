@@ -17,6 +17,7 @@ from django.conf import settings
 from django.db.models import Q
 import logging
 import re
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,19 @@ class DataPipeline:
             
             special_mf_count = self._load_specialized_mf_facts()
             self.stats['specialized_mf_loaded'] = special_mf_count
+
+            # Step 4c: Load specialized client dimensions (WealthMagic & PMS/AIF)
+            logger.info("\n[4c/5] Loading Specialized Client Dimensions...")
+            wm_count = self._load_wealthmagic_clients()
+            self.stats['wealthmagic_clients_loaded'] = wm_count
+            
+            pms_count = self._load_pms_aif_clients()
+            self.stats['pms_aif_clients_loaded'] = pms_count
+
+            # Step 4d: Load PMS/AIF sales records
+            logger.info("\n[4d/5] Loading PMS/AIF Sales Records...")
+            pms_aif_sales_count = self._load_pms_aif_sales_records()
+            self.stats['pms_aif_sales_loaded'] = pms_aif_sales_count
             
             # Step 5: Link UserProfile to Employee (optional)
             logger.info("\n[5/5] Linking UserProfile to Employee dimension...")
@@ -1131,8 +1145,10 @@ class DataPipeline:
         # Karvy/CAMS mapping requirements:
         # Karvy: "Investor Name", "Broker Code", "GrossBrokerage", "Amount (in Rs.)", "Transaction Date", "InvPAN", "InvCityName"
         # Camp: "Client_Name", "wire_code", "FEE_AMT", "AMOUNT", "Transaction_date", "PAN NO", city: "NO CITY"
+        # AAA: "Investor Name", "Main Code", "Brokerage Amount", "Purchase Date", "Sub Code", "ClientPAN"
         
-        all_files = list(self.mf_fact_path.glob('*.xlsx')) + list(self.mf_fact_path.glob('*.csv'))
+        # Using rglob to find files in subdirectories (like AAA/)
+        all_files = list(self.mf_fact_path.rglob('*.xlsx')) + list(self.mf_fact_path.rglob('*.csv'))
         
         with transaction.atomic():
             for file_path in all_files:
@@ -1140,9 +1156,10 @@ class DataPipeline:
                     period = self._extract_period_from_filename(file_path.name)
                     is_karvy = 'karvy' in file_path.name.lower()
                     is_camp = 'camp' in file_path.name.lower() or 'camp' in str(file_path).lower()
+                    is_aaa = 'AAA' in str(file_path)
 
                     SalesRecordMF.objects.filter(file_name=file_path.name).delete()
-                    logger.info(f"  Processing MF File: {file_path.name} (Karvy={is_karvy}, CAMS={is_camp})")
+                    logger.info(f"  Processing MF File: {file_path.name} (Karvy={is_karvy}, CAMS={is_camp}, AAA={is_aaa})")
 
                     if file_path.suffix.lower() == '.csv':
                         dataframes = [pd.read_csv(file_path)]
@@ -1156,37 +1173,91 @@ class DataPipeline:
                         # Use self._get_col to find the actual columns in the file
                         id_col = self._get_col(df, ['Transaction ID', 'TRXN_ID', 'TRXN_NO', 'Transaction Number'])
                         name_col = self._get_col(df, ['Investor Name', 'Client_Name', 'INV_NAME', 'INVESTORN0', 'INVESTOR NAME'])
-                        wire_col = self._get_col(df, ['Broker Code', 'WireCode', 'wire_code', 'wire code', 'Wire'])
-                        brk_col = self._get_col(df, ['GrossBrokerage', 'FEE_AMT', 'BROKERAGE', 'Total Brokerage', 'Brokerage', 'Brokerage (in Rs.)'])
-                        trn_col = self._get_col(df, ['Amount (in Rs.)', 'AMOUNT', 'Total Turnover', 'Turnover', 'Pur Gross Amount'])
-                        date_col = self._get_col(df, ['Transaction Date', 'Transaction_date', 'TRANSACTION DATE', 'TRANSACTION_DATE'])
-                        pan_col = self._get_col(df, ['InvPAN', 'PAN NO', 'PAN_NO', 'PAN', 'InvPAN', 'Client_Pan', 'Client PAN'])
+                        wire_col = self._get_col(df, ['Broker Code', 'WireCode', 'wire_code', 'wire code', 'Wire', 'Sub Code'])
+                        main_wire_col = self._get_col(df, ['Main Code'])
+                        brk_col = self._get_col(df, ['GrossBrokerage', 'FEE_AMT', 'BROKERAGE', 'Total Brokerage', 'Brokerage', 'Brokerage (in Rs.)', 'Brokerage Amount'])
+                        trn_col = self._get_col(df, ['Amount (in Rs.)', 'AMOUNT', 'Total Turnover', 'Turnover', 'Pur Gross Amount', 'Brokerage Amount'])
+                        date_col = self._get_col(df, ['Transaction Date', 'Transaction_date', 'TRANSACTION DATE', 'TRANSACTION_DATE', 'Purchase Date'])
+                        pan_col = self._get_col(df, ['InvPAN', 'PAN NO', 'PAN_NO', 'PAN', 'InvPAN', 'Client_Pan', 'Client PAN', 'ClientPAN'])
                         city_col = self._get_col(df, ['InvCityName', 'City', 'Client_City', 'InvCity'])
 
                         for i, row in df.iterrows():
                             try:
-                                trxn_id = str(row.get(id_col, '')).strip() if id_col else f"SYN-{file_path.stem[:10]}-{i}"
-                                if (not trxn_id or trxn_id.lower() == 'nan') and not id_col:
-                                    trxn_id = f"SYN-{file_path.stem[:10]}-{i}"
-                                
                                 client_pan = str(row.get(pan_col, '')).strip() if pan_col else None
                                 if not client_pan or client_pan.lower() == 'nan':
                                     client_pan = "NO PAN"
                                 
+                                # Metrics (needed for deduplication hash)
+                                brokerage = self._safe_decimal(row.get(brk_col, 0))
+                                turnover = self._safe_decimal(row.get(trn_col, 0))
+                                
+                                # Date
+                                trans_date = self._parse_date(row.get(date_col)) if date_col else None
+                                if not trans_date and period:
+                                    trans_date = self._get_fallback_date_from_period(period)
+
+                                wire_code_val = str(row.get(wire_col, '')).strip() if wire_col else None
+                                client_name_val = str(row.get(name_col, '')).strip() or None
+
+                                # Transaction ID logic
+                                if is_aaa:
+                                    # Create a unique 10 character alpha numeric value (deterministic for cross-file deduplication)
+                                    unique_str = f"AAA_{client_pan}_{trans_date}_{brokerage}_{wire_code_val}_{client_name_val}"
+                                    trxn_id = hashlib.md5(unique_str.encode()).hexdigest()[:10].upper()
+                                    
+                                    # Deduplication: DO NOT include redundant data
+                                    if SalesRecordMF.objects.filter(transaction_id=trxn_id).exists():
+                                        continue
+                                else:
+                                    trxn_id = str(row.get(id_col, '')).strip() if id_col else f"SYN-{file_path.stem[:10]}-{i}"
+                                    if (not trxn_id or trxn_id.lower() == 'nan') and not id_col:
+                                        trxn_id = f"SYN-{file_path.stem[:10]}-{i}"
+
                                 # Dimensions lookup by PAN
                                 client = None
                                 if client_pan != "NO PAN":
                                     client = Client.objects.filter(client_pan=client_pan).first()
                                 
-                                employee = None
-                                if client and client.employee:
-                                    employee = client.employee
-                                elif client_pan != "NO PAN":
-                                    # Try to find employee by PAN directly (sometimes clients aren't in dimension but RM is)
-                                    employee = Employee.objects.filter(pan_number=client_pan).first()
+                                # FALLBACK: if no client by PAN, try by Name (to fix records missing PAN in file but present in dimension)
+                                if not client and client_name_val:
+                                    client = Client.objects.filter(client_name__iexact=client_name_val).first()
+                                    if client and client.client_pan:
+                                        client_pan = client.client_pan
 
-                                # Wire code logic
-                                wire_code_val = str(row.get(wire_col, '')).strip() if wire_col else None
+                                # RM and Manager Logic
+                                if is_aaa:
+                                    # Specific lookups for AAA as requested
+                                    rm_name = client.rm_name if client else "Nitin Mude"
+                                    # lookup rm_manager_name from employee_dimension based on rm_name
+                                    emp_for_mgr = Employee.objects.filter(rm_name=rm_name).first()
+                                    rm_manager_name = emp_for_mgr.rm_manager_name if emp_for_mgr else None
+                                    # lookup city from client_dimension via client_pan
+                                    client_city = client.city if client else "NO CITY"
+                                    # employee and client FKs
+                                    employee = client.employee if client else None
+                                    # broker_wire_code is "Main Code"
+                                    broker_wire_code_val = str(row.get(main_wire_col, '')).strip() if main_wire_col else None
+                                else:
+                                    employee = None
+                                    if client and client.employee:
+                                        employee = client.employee
+                                    elif client_pan != "NO PAN":
+                                        employee = Employee.objects.filter(pan_number=client_pan).first()
+
+                                    rm_name = "Nitin Mude" # Default as requested
+                                    rm_manager_name = None
+                                    
+                                    if employee:
+                                        rm_name = employee.rm_name
+                                        rm_manager_name = employee.rm_manager_name
+                                    elif client and client.rm_name:
+                                        rm_name = client.rm_name
+                                        rm_manager_name = client.rm_manager_name
+                                    
+                                    client_city = str(row.get(city_col, "NO CITY")).strip() if city_col else "NO CITY"
+                                    broker_wire_code_val = wire_code_val
+
+                                # Wire code logic for record (use mapped if missing)
                                 mapped_wire_code = wire_code_val
                                 if not mapped_wire_code or mapped_wire_code.lower() == 'nan':
                                     if client and client.wire_code:
@@ -1194,35 +1265,12 @@ class DataPipeline:
                                     elif employee and employee.wire_code:
                                         mapped_wire_code = employee.wire_code
 
-                                # RM and Manager Logic
-                                rm_name = "Nitin Mude" # Default as requested
-                                rm_manager_name = None
-                                
-                                if employee:
-                                    rm_name = employee.rm_name
-                                    rm_manager_name = employee.rm_manager_name
-                                elif client and client.rm_name:
-                                    rm_name = client.rm_name
-                                    rm_manager_name = client.rm_manager_name
-                                
-                                # Handle MA/Manager hierarchy if needed (consistent with legacy logic)
-                                if employee and employee.designation == 'MA':
-                                    # If it's an MA, they report to a manager. We want to attribute to manager if possible
-                                    # but the specialized model keeps rm_name. The requirement says:
-                                    # "Link to employee_id and client_id via client_pan lookup... RM defaults to Nitin Mude"
-                                    # Actually, if we have an employee, let's use their name.
-                                    pass
-
-                                trans_date = self._parse_date(row.get(date_col)) if date_col else None
-                                if not trans_date and period:
-                                    trans_date = self._get_fallback_date_from_period(period)
-
                                 SalesRecordMF.objects.create(
                                     transaction_id=trxn_id,
-                                    client_name=str(row.get(name_col, '')).strip() or (client.client_name if client else None),
-                                    broker_wire_code=wire_code_val,
-                                    mf_brokerage=self._safe_decimal(row.get(brk_col, 0)),
-                                    mf_turnover=self._safe_decimal(row.get(trn_col, 0)),
+                                    client_name=client_name_val or (client.client_name if client else None),
+                                    broker_wire_code=broker_wire_code_val,
+                                    mf_brokerage=brokerage,
+                                    mf_turnover=turnover,
                                     file_name=file_path.name,
                                     transaction_date=trans_date,
                                     period=period,
@@ -1232,7 +1280,7 @@ class DataPipeline:
                                     employee=employee,
                                     rm_name=rm_name,
                                     rm_manager_name=rm_manager_name,
-                                    client_city=str(row.get(city_col, "NO CITY")).strip() if city_col else "NO CITY"
+                                    client_city=client_city
                                 )
                                 count += 1
                             except Exception as e:
@@ -1242,5 +1290,230 @@ class DataPipeline:
                 except Exception as e:
                     logger.error(f"  Critical error processing {file_path.name}: {e}")
                     continue
+        return count
+
+    def _load_wealthmagic_clients(self):
+        """Load WealthMagic clients from data_files/Client_dim/WealthMagic/"""
+        from core.models import ClientWealthMagic, Employee
+        count = 0
+        path = self.client_dim_path / 'WealthMagic'
+        if not path.exists():
+            return count
+        
+        files = list(path.glob('*.xlsx'))
+        for file_path in files:
+            try:
+                df = pd.read_excel(file_path)
+                df.columns = df.columns.str.strip()
+                
+                for _, row in df.iterrows():
+                    try:
+                        client_code = str(row.get('Client Code', '')).strip()
+                        if not client_code or client_code.lower() == 'nan':
+                            continue
+                            
+                        rm_name = str(row.get('RM_Name', '')).strip()
+                        emp = Employee.objects.filter(rm_name=rm_name).first()
+                        rm_manager = emp.rm_manager_name if emp and emp.rm_manager_name else "Nitin Mude"
+                        
+                        onboarded = self._parse_date(row.get('Onboarded on'))
+                        
+                        ClientWealthMagic.objects.update_or_create(
+                            client_code=client_code,
+                            client_name=str(row.get('Client_Name', '')).strip(),
+                            rm_name=rm_name,
+                            defaults={
+                                'rm_manager_name': rm_manager,
+                                'onboarded_on': onboarded,
+                                'wire_code': str(row.get('WireCode', '')).strip() if not pd.isna(row.get('WireCode')) else None,
+                                'aum': self._safe_decimal(row.get('Aum', 0)),
+                                'client_pan': str(row.get('Client_Pan', '')).strip() if not pd.isna(row.get('Client_Pan')) else None,
+                                'rm_pan': str(row.get('RM_Pan', '')).strip() if not pd.isna(row.get('RM_Pan')) else None,
+                            }
+                        )
+                        count += 1
+                    except: continue
+            except: continue
+        return count
+
+    def _load_pms_aif_clients(self):
+        """Load PMS/AIF clients from data_files/Client_dim/PMS_AIF/"""
+        from core.models import ClientPMSAIF, Employee
+        count = 0
+        path = self.client_dim_path / 'PMS_AIF'
+        if not path.exists():
+            return count
+        
+        files = list(path.glob('*.xlsx'))
+        for file_path in files:
+            try:
+                df = pd.read_excel(file_path)
+                df.columns = df.columns.str.strip()
+                
+                for _, row in df.iterrows():
+                    try:
+                        client_code = str(row.get('Client Code', '')).strip()
+                        client_name = str(row.get('Client_Name', '')).strip()
+
+                        # Fallback for missing code to catch all 37 rows
+                        if (not client_code or client_code.lower() == 'nan') and client_name:
+                            client_code = f"MISSING-{client_name[:10]}"
+
+                        if not client_code or client_code.lower() == 'nan':
+                            continue
+                            
+                        rm_name = str(row.get('RM_Name', '')).strip()
+                        emp = Employee.objects.filter(rm_name=rm_name).first()
+                        rm_manager = emp.rm_manager_name if emp and emp.rm_manager_name else "Nitin Mude"
+                        
+                        onboarded = self._parse_date(row.get('Onboarded on'))
+                        
+                        # PMS/AIF AUM might have "Cr" etc.
+                        aum_raw = row.get('AUM (₹)', row.get('Aum', 0))
+                        aum_val = self._parse_aum(aum_raw)
+
+                        ClientPMSAIF.objects.update_or_create(
+                            client_code=client_code,
+                            client_name=str(row.get('Client_Name', '')).strip(),
+                            rm_name=rm_name,
+                            defaults={
+                                'rm_manager_name': rm_manager,
+                                'onboarded_on': onboarded,
+                                'wire_code': str(row.get('WireCode', '')).strip() if not pd.isna(row.get('WireCode')) else None,
+                                'aum': aum_val,
+                                'client_pan': str(row.get('Client_Pan', '')).strip() if not pd.isna(row.get('Client_Pan')) else None,
+                                'rm_pan': str(row.get('RM_Pan', '')).strip() if not pd.isna(row.get('RM_Pan')) else None,
+                                'ma_name': str(row.get('MA_Name', '')).strip() if not pd.isna(row.get('MA_Name')) else None,
+                                'ma_pan': str(row.get('MA_PAN', '')).strip() if not pd.isna(row.get('MA_PAN')) else None,
+                            }
+                        )
+                        count += 1
+                    except: continue
+            except: continue
+        return count
+
+    def _load_pms_aif_sales_records(self):
+        """Load PMS and AIF sales records from data_files/PMSAIF/"""
+        from core.models import SalesRecordPMSAIF, ClientPMSAIF, Employee
+        count = 0
+        pmsaif_root = self.project_root / 'data_files' / 'PMSAIF'
+        if not pmsaif_root.exists():
+            return count
+
+        # AIF: "Folio No.", "Investor Name" or "Client Name", "Pan No" or "PAN", "Scheme Name", "Sb Code" or "Broker Code", "AUM", "Final Referral Amt" or "Total Amount", "From Date" or "Date"
+        # PMS: "Client code", "Portfolio Name" or "Client Name", "Pan No" or "PAN", "Scheme Name" or "Scheme", "Sb Code", "AUM", "Total" or "Total payable(Including GST)" or "Final Referral Amt", "Inception Date" or "From Date"
+
+        # Folder to type mapping
+        sources = [
+            (pmsaif_root / 'AIF', 'aif'),
+            (pmsaif_root / 'PMS', 'pms')
+        ]
+
+        with transaction.atomic():
+            for folder, stype in sources:
+                if not folder.exists(): continue
+                files = list(folder.glob('**/*.csv')) + list(folder.glob('**/*.xlsx'))
+                for file_path in files:
+                    try:
+                        period = self._extract_period_from_filename(file_path.name)
+                        SalesRecordPMSAIF.objects.filter(file_name=file_path.name).delete()
+                        
+                        if file_path.suffix.lower() == '.csv':
+                            df = pd.read_csv(file_path)
+                        else:
+                            df = pd.read_excel(file_path)
+                        
+                        df.columns = df.columns.str.strip()
+                        
+                        # Find columns
+                        code_cols = ['Folio No.', 'Client code', 'Client Code', 'Folio No']
+                        name_cols = ['Investor Name', 'Client Name', 'Portfolio Name', 'Client_Name']
+                        pan_cols = ['Pan No', 'PAN', 'PAN No', 'Pan No.']
+                        scheme_cols = ['Scheme Name', 'Scheme', 'SCHEME']
+                        broker_cols = ['Sb Code', 'Broker Code', 'Broker_Code', 'SB Code']
+                        aum_cols = ['AUM', 'Aum']
+                        amount_cols = ['Final Referral Amt', 'Total Amount', 'Total', 'Total payable(Including GST)']
+                        date_cols = ['From Date', 'Date', 'Inception Date', 'Transaction Date']
+
+                        for _, row in df.iterrows():
+                            try:
+                                client_pan = str(row.get(self._get_col(df, pan_cols), '')).strip()
+                                if not client_pan or client_pan.lower() == 'nan':
+                                    client_pan = None
+                                
+                                # Lookup in client_dimension_PMSAIF
+                                client_dim = None
+                                if client_pan:
+                                    client_dim = ClientPMSAIF.objects.filter(client_pan=client_pan).first()
+                                
+                                # RM details from dim or employee table
+                                rm_pan = client_dim.rm_pan if client_dim else None
+                                rm_name = None
+                                rm_mgr = None
+                                
+                                # Attempt lookup by RM PAN if available
+                                if rm_pan:
+                                    emp = Employee.objects.filter(pan_number=rm_pan).first()
+                                    if emp:
+                                        rm_name = emp.rm_name
+                                        rm_mgr = emp.rm_manager_name
+                                
+                                # If RM name still missing, try client dimension fallback
+                                if not rm_name and client_dim:
+                                    rm_name = client_dim.rm_name
+                                    rm_mgr = client_dim.rm_manager_name
+
+                                # NEW: Fallback if rm_name is null -> Nitin Mude
+                                if not rm_name or rm_name.lower() == 'nan':
+                                    rm_name = "Nitin Mude"
+
+                                # NEW: If rm_pan is missing but we have a name (like Bhushan or Nitin), lookup PAN from Employee table
+                                if not rm_pan and rm_name:
+                                    emp = Employee.objects.filter(rm_name__iexact=rm_name).first()
+                                    if emp:
+                                        rm_pan = emp.pan_number
+                                        rm_mgr = emp.rm_manager_name if not rm_mgr else rm_mgr
+
+                                # Broker code logic
+                                broker_code = str(row.get(self._get_col(df, broker_cols), '')).strip()
+                                if (not broker_code or broker_code.lower() == 'nan') and rm_pan:
+                                    emp = Employee.objects.filter(pan_number=rm_pan).first()
+                                    if emp: broker_code = emp.wire_code
+                                
+                                # AUM logic
+                                row_aum = self._safe_decimal(row.get(self._get_col(df, aum_cols), 0))
+                                if stype == 'aif':
+                                    aif_aum = row_aum
+                                    if (not aif_aum or aif_aum == 0) and client_dim:
+                                        aif_aum = client_dim.aum
+                                    pms_aum = Decimal('0')
+                                else:
+                                    pms_aum = row_aum
+                                    if (not pms_aum or pms_aum == 0) and client_dim:
+                                        pms_aum = client_dim.aum
+                                    aif_aum = Decimal('0')
+
+                                SalesRecordPMSAIF.objects.create(
+                                    client_code=str(row.get(self._get_col(df, code_cols), '')).strip() or None,
+                                    client_name=str(row.get(self._get_col(df, name_cols), '')).strip() or None,
+                                    client_pan=client_pan,
+                                    scheme_name=str(row.get(self._get_col(df, scheme_cols), '')).strip() or None,
+                                    broker_code=broker_code if broker_code and broker_code.lower() != 'nan' else None,
+                                    type=stype,
+                                    rm_pan=rm_pan,
+                                    rm_name=rm_name,
+                                    rm_manager_name=rm_mgr,
+                                    pms_aum=pms_aum,
+                                    aif_aum=aif_aum,
+                                    total_amount=self._safe_decimal(row.get(self._get_col(df, amount_cols), 0)),
+                                    transaction_date=self._parse_date(row.get(self._get_col(df, date_cols))),
+                                    file_name=file_path.name,
+                                    period=period
+                                )
+                                count += 1
+                            except: continue
+                    except Exception as e:
+                        logger.error(f"Error loading {file_path}: {e}")
+                        continue
         return count
 
